@@ -235,6 +235,78 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
 
 
 # ─────────────────────────────────────────────────────────────
+# FORECAST (Prophet-based with confidence bands)
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/forecast/{institution_id}/academic/{kpi_field}")
+def get_academic_forecast(institution_id: int, kpi_field: str, db: Session = Depends(get_db)):
+    """Prophet forecast for an academic KPI with 80% confidence bands."""
+    from services.forecast_service import forecast_kpi
+    rows = db.query(AcademicKPI).filter(
+        AcademicKPI.institution_id == institution_id
+    ).order_by(AcademicKPI.semester).all()
+    if not rows:
+        raise HTTPException(404, "Aucune donnée académique trouvée")
+    data = [_row_to_dict(r) for r in rows]
+    result = forecast_kpi(data, kpi_field, periods=2)
+    if not result:
+        raise HTTPException(400, "Données insuffisantes (min. 3 semestres requis)")
+    return result
+
+
+@router.get("/forecast/{institution_id}/finance/{kpi_field}")
+def get_finance_forecast(institution_id: int, kpi_field: str, db: Session = Depends(get_db)):
+    """Prophet forecast for a finance KPI."""
+    from services.forecast_service import forecast_kpi
+    rows = db.query(FinanceKPI).filter(
+        FinanceKPI.institution_id == institution_id
+    ).order_by(FinanceKPI.fiscal_year).all()
+    if not rows:
+        raise HTTPException(404, "Aucune donnée financière trouvée")
+    data = [_row_to_dict(r) for r in rows]
+    result = forecast_kpi(data, kpi_field, periods=2)
+    if not result:
+        raise HTTPException(400, "Données insuffisantes pour la prévision")
+    return result
+
+
+@router.get("/forecast/{institution_id}/hr/{kpi_field}")
+def get_hr_forecast(institution_id: int, kpi_field: str, db: Session = Depends(get_db)):
+    """Prophet forecast for an HR KPI."""
+    from services.forecast_service import forecast_kpi
+    rows = db.query(HRKPI).filter(
+        HRKPI.institution_id == institution_id
+    ).order_by(HRKPI.semester).all()
+    if not rows:
+        raise HTTPException(404, "Aucune donnée RH trouvée")
+    data = [_row_to_dict(r) for r in rows]
+    result = forecast_kpi(data, kpi_field, periods=2)
+    if not result:
+        raise HTTPException(400, "Données insuffisantes pour la prévision")
+    return result
+
+
+@router.get("/forecast/risk-matrix")
+def get_risk_matrix(db: Session = Depends(get_db)):
+    """Return probability × impact risk matrix for all institutions."""
+    from services.forecast_service import compute_risk_matrix
+    institutions = db.query(Institution).filter(Institution.is_active == True).all()
+
+    all_data = []
+    for inst in institutions:
+        academic = db.query(AcademicKPI).filter(
+            AcademicKPI.institution_id == inst.id
+        ).order_by(AcademicKPI.semester).all()
+        if academic:
+            all_data.append({
+                'institution': _row_to_dict(inst) | {'name_fr': inst.name_fr, 'code': inst.code},
+                'academic': [_row_to_dict(a) for a in academic],
+            })
+
+    return compute_risk_matrix(all_data)
+
+
+# ─────────────────────────────────────────────────────────────
 # PREDICTIONS (pre-computed from context/13-demo-data-strategy)
 # ─────────────────────────────────────────────────────────────
 

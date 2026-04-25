@@ -86,4 +86,17 @@ export const generateReport = (institution_id, period, format, report_type = 'mo
     { responseType: 'blob' }
   ).then((r) => r)
 
+// ── Forecast (Prophet) ────────────────────────────────────────
+export const getForecastAcademic = (institutionId, kpiField) =>
+  client.get(`/forecast/${institutionId}/academic/${kpiField}`).then((r) => r.data)
+
+export const getForecastFinance = (institutionId, kpiField) =>
+  client.get(`/forecast/${institutionId}/finance/${kpiField}`).then((r) => r.data)
+
+export const getForecastHR = (institutionId, kpiField) =>
+  client.get(`/forecast/${institutionId}/hr/${kpiField}`).then((r) => r.data)
+
+export const getRiskMatrix = () =>
+  client.get('/forecast/risk-matrix').then((r) => r.data)
+
 export default client

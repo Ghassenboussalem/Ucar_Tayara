@@ -10,6 +10,7 @@ import {
   Lock,
   Network,
   Map,
+  Brain,
   FlaskConical,
   Handshake,
   HeartPulse,
@@ -44,6 +45,7 @@ const NAV = [
     items: [
       { to: '/reports', icon: FileText, label: 'Rapports' },
       { to: '/causal', icon: Network, label: 'Graphe Causal' },
+      { to: '/analytics', icon: Brain, label: 'Analytique prédictive' },
     ],
   },
 ]

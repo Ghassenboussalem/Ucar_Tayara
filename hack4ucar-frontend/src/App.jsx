@@ -8,6 +8,7 @@ import ReportsPage from './pages/ReportsPage'
 import InstitutionsPage from './pages/InstitutionsPage'
 import CausalGraphPage from './pages/CausalGraphPage'
 import MapPage from './pages/MapPage'
+import PredictiveAnalyticsPage from './pages/PredictiveAnalyticsPage'
 
 function isAuthenticated() {
   return !!localStorage.getItem('ucar_token')
@@ -38,6 +39,7 @@ export default function App() {
           <Route path="reports" element={<ReportsPage />} />
           <Route path="causal" element={<CausalGraphPage />} />
           <Route path="map" element={<MapPage />} />
+          <Route path="analytics" element={<PredictiveAnalyticsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
