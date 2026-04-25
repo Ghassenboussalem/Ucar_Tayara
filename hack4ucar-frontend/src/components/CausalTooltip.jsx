@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Brain, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react'
+import { Brain, TrendingUp, TrendingDown, ArrowRight, Lightbulb } from 'lucide-react'
 import client from '../api/client'
 
 // Cache fetched results to avoid repeated calls
@@ -119,7 +119,7 @@ export default function CausalTooltip({ kpiName, value, threshold, children }) {
               {/* Recommendation */}
               {data.recommendation && (
                 <div style={{ padding: '8px 10px', background: 'rgba(29,83,148,0.05)', borderRadius: '6px', border: '1px solid rgba(29,83,148,0.1)' }}>
-                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgb(29,83,148)', marginBottom: '3px' }}>💡 RECOMMANDATION</div>
+                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'rgb(29,83,148)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}><Lightbulb size={10} /> RECOMMANDATION</div>
                   <div style={{ fontSize: '0.73rem', color: '#374151', lineHeight: 1.5 }}>{data.recommendation}</div>
                 </div>
               )}
