@@ -67,9 +67,15 @@ export const resolveAlert = (id) =>
 export const explainAlert = (id) =>
   client.get(`/alerts/${id}/explain`).then((r) => r.data)
 
-// ── AI Chat ───────────────────────────────────────────────────
-export const sendChat = (message, institution_id = null) =>
-  client.post('/ai/chat', { message, institution_id }).then((r) => r.data)
+// ── AI Chat (agent + RAG) ─────────────────────────────────────
+export const sendChat = (message, history = [], institution_id = null) =>
+  client.post('/ai/chat', { message, history, institution_id }).then((r) => r.data)
+
+export const ingestPdfs = () =>
+  client.post('/ai/ingest-pdfs').then((r) => r.data)
+
+export const getRagStats = () =>
+  client.get('/ai/rag-stats').then((r) => r.data)
 
 // ── Reports ───────────────────────────────────────────────────
 export const generateReport = (institution_id, period, format, report_type = 'monthly') =>

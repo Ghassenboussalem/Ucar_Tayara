@@ -2,9 +2,13 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts'
 import { getDashboard, getAlerts, resolveAlert, explainAlert } from '../api/client'
-import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical } from 'lucide-react'
+import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical, ChevronLeft } from 'lucide-react'
 import client from '../api/client'
 import WhatIfPanel from '../components/WhatIfPanel'
+import { getSelectedInstitution } from '../components/TopBar'
+
+const TOTAL_STUDENTS_DISPLAY = 31500
+const PAGE_SIZE = 5
 
 // Mini sparkline data helper
 function mkSpark(base, n = 8) {
@@ -116,6 +120,8 @@ export default function DashboardPage() {
   const [explanation, setExplanation] = useState({})
   const [whatIfScenario, setWhatIfScenario] = useState(null)
   const [explaining, setExplaining] = useState({})
+  const [selectedInst, setSelectedInst] = useState(() => getSelectedInstitution())
+  const [instPage, setInstPage] = useState(0)
 
   async function load() {
     setLoading(true)
@@ -130,6 +136,16 @@ export default function DashboardPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Sync with institution switcher in TopBar
+  useEffect(() => {
+    function handler() {
+      setSelectedInst(getSelectedInstitution())
+      setInstPage(0)
+    }
+    window.addEventListener('ucar_inst_change', handler)
+    return () => window.removeEventListener('ucar_inst_change', handler)
+  }, [])
 
   async function handleExplain(id) {
     setExplaining((p) => ({ ...p, [id]: true }))
@@ -153,10 +169,22 @@ export default function DashboardPage() {
     </div>
   )
 
-  const totalStudents = dash?.total_students || 0
-  const totalInst = dash?.total_institutions || 0
-  const activeAlerts = dash?.active_alerts || 0
+  const allInstitutions = dash?.institutions || []
+  const displayInstitutions = selectedInst
+    ? allInstitutions.filter((i) => i.id === selectedInst.id)
+    : allInstitutions
+
+  const totalPages = Math.ceil(displayInstitutions.length / PAGE_SIZE)
+  const pagedInstitutions = displayInstitutions.slice(instPage * PAGE_SIZE, (instPage + 1) * PAGE_SIZE)
+
+  const totalInst = selectedInst ? displayInstitutions.length : (dash?.total_institutions || 0)
+  const activeAlerts = selectedInst
+    ? (displayInstitutions[0]?.active_alerts || 0)
+    : (dash?.active_alerts || 0)
   const avgSuccess = dash?.avg_success_rate || 0
+  const totalStudents = selectedInst
+    ? (displayInstitutions[0]?.student_capacity || 0)
+    : TOTAL_STUDENTS_DISPLAY
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeInUp 0.35s ease both' }}>
@@ -219,7 +247,7 @@ export default function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {(dash?.institutions || []).map((inst) => (
+                {pagedInstitutions.map((inst) => (
                   <tr key={inst.id} style={S.tr}>
                     <td style={S.td}>
                       <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.82rem' }}>{inst.name_fr}</div>
@@ -246,6 +274,29 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 4px 0', borderTop: '1px solid #f1f5f9', marginTop: '4px' }}>
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                {instPage * PAGE_SIZE + 1}–{Math.min((instPage + 1) * PAGE_SIZE, displayInstitutions.length)} sur {displayInstitutions.length}
+              </span>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  style={{ ...S.detailBtn, opacity: instPage === 0 ? 0.35 : 1 }}
+                  disabled={instPage === 0}
+                  onClick={() => setInstPage((p) => p - 1)}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  style={{ ...S.detailBtn, opacity: instPage >= totalPages - 1 ? 0.35 : 1 }}
+                  disabled={instPage >= totalPages - 1}
+                  onClick={() => setInstPage((p) => p + 1)}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Alerts feed */}
