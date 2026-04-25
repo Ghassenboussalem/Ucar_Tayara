@@ -1,0 +1,98 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { getInstitutions } from '../api/client'
+import { Building2, ChevronRight, Search } from 'lucide-react'
+
+function HealthDot({ score }) {
+  const color = score >= 75 ? '#22c55e' : score >= 55 ? '#f59e0b' : '#ef4444'
+  return <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+}
+
+export default function InstitutionsPage() {
+  const navigate = useNavigate()
+  const [institutions, setInstitutions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    getInstitutions().then(setInstitutions).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  const filtered = institutions.filter((i) =>
+    i.name_fr.toLowerCase().includes(search.toLowerCase()) ||
+    (i.code || '').toLowerCase().includes(search.toLowerCase()) ||
+    (i.governorate || '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '22px', animation: 'fadeInUp 0.3s ease both' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Building2 size={22} color="rgb(29,83,148)" /> Institutions
+          </h1>
+          <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '4px' }}>Réseau UCAR — {institutions.length} établissements</p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div style={{ position: 'relative', maxWidth: '360px' }}>
+        <Search size={15} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', pointerEvents: 'none' }} />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher par nom, code ou gouvernorat…"
+          style={{ padding: '9px 12px 9px 36px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '0.82rem', fontFamily: 'Inter,sans-serif', width: '100%', outline: 'none', background: 'white' }}
+        />
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <p style={{ textAlign: 'center', color: '#94a3b8', padding: '60px' }}>Chargement…</p>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '16px' }}>
+          {filtered.map((inst) => (
+            <div key={inst.id}
+              onClick={() => navigate(`/institutions/${inst.id}`)}
+              style={{ background: 'white', borderRadius: '12px', padding: '20px', border: '1px solid #e2e8f0', cursor: 'pointer', transition: 'box-shadow 150ms, transform 150ms', display: 'flex', flexDirection: 'column', gap: '12px' }}
+              onMouseEnter={(e) => { e.currentTarget.style.boxShadow = '0 4px 20px rgba(29,83,148,0.12)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.boxShadow = ''; e.currentTarget.style.transform = '' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <div style={{ width: '42px', height: '42px', background: 'rgba(29,83,148,0.08)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgb(29,83,148)', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>
+                  {(inst.code || '').slice(0, 2)}
+                </div>
+                <ChevronRight size={16} style={{ color: '#cbd5e1' }} />
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.88rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{inst.name_fr}</div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '3px' }}>{inst.code}</div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                {inst.governorate && (
+                  <span style={{ padding: '2px 8px', borderRadius: '6px', background: '#f1f5f9', color: '#64748b', fontSize: '0.7rem', fontWeight: 600 }}>📍 {inst.governorate}</span>
+                )}
+                {inst.type && (
+                  <span style={{ padding: '2px 8px', borderRadius: '6px', background: 'rgba(29,83,148,0.06)', color: 'rgb(29,83,148)', fontSize: '0.7rem', fontWeight: 600 }}>{inst.type}</span>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
+                <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
+                  👥 {(inst.student_capacity || 0).toLocaleString('fr-FR')} étudiants
+                </span>
+                {inst.director_name && (
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {inst.director_name}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
