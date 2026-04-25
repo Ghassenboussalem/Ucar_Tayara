@@ -8,6 +8,7 @@ import {
   ChevronRight,
   TrendingUp,
   Lock,
+  Brain,
   FlaskConical,
   Handshake,
   HeartPulse,
@@ -40,6 +41,7 @@ const NAV = [
     section: 'Intelligence',
     items: [
       { to: '/reports', icon: FileText, label: 'Rapports' },
+      { to: '/analytics', icon: Brain, label: 'Analytique prédictive' },
     ],
   },
 ]
