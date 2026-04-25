@@ -62,7 +62,7 @@ const SCENARIOS = {
         delta: -11,
         confidence: 84,
         delay: 'Immédiat',
-        detail: 'Économie estimée : 180 000 TND/mois. Gel des postes non essentiels jusqu'en juin.',
+        detail: "Économie estimée : 180 000 TND/mois. Gel des postes non essentiels jusqu'en juin.",
       },
       {
         id: 'realloc',
