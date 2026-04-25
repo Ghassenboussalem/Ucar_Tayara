@@ -3,9 +3,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from database import get_db
-from models.models import Institution, AcademicKPI, FinanceKPI, HRKPI, Alert, User
+from models.models import Institution, AcademicKPI, FinanceKPI, HRKPI, Alert, User, EmploymentKPI, InfrastructureKPI, PartnershipKPI, ESGKPI, ResearchKPI
 from models.schemas import *
-from services.claude_service import answer_data_question, explain_anomaly, generate_report_summary
+from services.claude_service import explain_anomaly, generate_report_summary
+from services.agent_service import run_agent
+from agents.orchestrator import orchestrator
 from services.report_service import generate_pdf_report, generate_excel_report
 from services.auth_service import authenticate_user, create_access_token
 
@@ -165,6 +167,26 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
         Alert.is_resolved == False
     ).all()
 
+    employment = db.query(EmploymentKPI).filter(
+        EmploymentKPI.institution_id == institution_id
+    ).order_by(EmploymentKPI.graduation_year).all()
+
+    infrastructure = db.query(InfrastructureKPI).filter(
+        InfrastructureKPI.institution_id == institution_id
+    ).order_by(InfrastructureKPI.semester).all()
+
+    partnership = db.query(PartnershipKPI).filter(
+        PartnershipKPI.institution_id == institution_id
+    ).order_by(PartnershipKPI.academic_year).all()
+
+    esg = db.query(ESGKPI).filter(
+        ESGKPI.institution_id == institution_id
+    ).order_by(ESGKPI.fiscal_year).all()
+
+    research = db.query(ResearchKPI).filter(
+        ResearchKPI.institution_id == institution_id
+    ).order_by(ResearchKPI.academic_year).all()
+
     # Compute network averages for benchmarking
     latest_semester = db.query(AcademicKPI.semester).order_by(AcademicKPI.id.desc()).first()
     latest_sem = latest_semester[0] if latest_semester else None
@@ -226,6 +248,11 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
         "finance": [_row_to_dict(f) for f in finance],
         "hr": [_row_to_dict(h) for h in hr],
         "alerts": [_alert_to_dict(a) for a in alerts],
+        "employment": [_row_to_dict(e) for e in employment],
+        "infrastructure": [_row_to_dict(i) for i in infrastructure],
+        "partnership": [_row_to_dict(p) for p in partnership],
+        "esg": [_row_to_dict(e) for e in esg],
+        "research": [_row_to_dict(r) for r in research],
         "network_avg": {
             "academic": net_avg_academic,
             "finance": net_avg_finance,
@@ -307,88 +334,155 @@ def get_risk_matrix(db: Session = Depends(get_db)):
 
 
 # ─────────────────────────────────────────────────────────────
-# PREDICTIONS (pre-computed from context/13-demo-data-strategy)
+# PREDICTIONS (Prophet-based, real forecasts)
 # ─────────────────────────────────────────────────────────────
 
 @router.get("/predictions")
 def get_predictions(db: Session = Depends(get_db)):
-    """Return pre-computed predictive risk forecasts for the dashboard."""
+    """Return Prophet-based predictive risk forecasts for the dashboard."""
+    from services.forecast_service import forecast_kpi
+
+    def _fc_label(points):
+        fc_pts = [p for p in (points or []) if p['is_forecast']]
+        return fc_pts[-1]['name'] if fc_pts else 'Prévu'
+
     try:
-        # Compute real current values from DB
-        latest_sem_row = db.query(AcademicKPI.semester).order_by(AcademicKPI.id.desc()).first()
-        latest_sem = latest_sem_row[0] if latest_sem_row else "S1_2026"
+        # ── 1. Network dropout — per-semester average across all institutions ──
+        sem_avgs = db.query(
+            AcademicKPI.semester,
+            func.avg(AcademicKPI.dropout_rate).label('dropout_rate')
+        ).group_by(AcademicKPI.semester).order_by(AcademicKPI.semester).all()
 
-        avg_dropout_raw = db.query(func.avg(AcademicKPI.dropout_rate)).filter(
-            AcademicKPI.semester == latest_sem
-        ).scalar()
-        avg_dropout = float(avg_dropout_raw) if avg_dropout_raw else 6.2
+        dropout_data = [
+            {'semester': r.semester, 'dropout_rate': float(r.dropout_rate or 0)}
+            for r in sem_avgs
+        ]
+        fc_dropout = forecast_kpi(dropout_data, 'dropout_rate', periods=2)
 
-        # Find the institution with worst budget execution
-        worst_budget_row = db.query(
-            Institution.code, FinanceKPI.budget_execution_rate
-        ).join(FinanceKPI, FinanceKPI.institution_id == Institution.id).order_by(
-            FinanceKPI.budget_execution_rate.desc()
-        ).first()
+        latest_sem = sem_avgs[-1].semester if sem_avgs else None
 
-        wb_code = worst_budget_row[0] if worst_budget_row else "IHEC"
-        wb_val = float(worst_budget_row[1]) if worst_budget_row and worst_budget_row[1] else 88.0
+        # ── 2. Budget — institution with highest current execution rate ────────
+        latest_fy_row = db.query(FinanceKPI.fiscal_year).order_by(FinanceKPI.id.desc()).first()
+        latest_fy = latest_fy_row[0] if latest_fy_row else None
 
-        # Find institution with worst teaching load
-        worst_load_row = db.query(
-            Institution.code, HRKPI.avg_teaching_load_hours
-        ).join(HRKPI, HRKPI.institution_id == Institution.id).filter(
-            HRKPI.semester == latest_sem
-        ).order_by(HRKPI.avg_teaching_load_hours.desc()).first()
+        wb_code, fc_budget = 'IHEC', None
+        if latest_fy:
+            worst_b = db.query(Institution, FinanceKPI.budget_execution_rate).join(
+                FinanceKPI, FinanceKPI.institution_id == Institution.id
+            ).filter(FinanceKPI.fiscal_year == latest_fy).order_by(
+                FinanceKPI.budget_execution_rate.desc()
+            ).first()
+            if worst_b:
+                wb_inst, _ = worst_b
+                wb_code = wb_inst.code
+                budget_rows = db.query(FinanceKPI).filter(
+                    FinanceKPI.institution_id == wb_inst.id
+                ).order_by(FinanceKPI.fiscal_year).all()
+                fc_budget = forecast_kpi(
+                    [_row_to_dict(r) for r in budget_rows], 'budget_execution_rate', periods=2
+                )
 
-        wl_code = worst_load_row[0] if worst_load_row else "INSAT"
-        wl_val = float(worst_load_row[1]) if worst_load_row and worst_load_row[1] else 31.2
+        # ── 3. HR — institution with highest teaching load ─────────────────────
+        wl_code, fc_hr = 'INSAT', None
+        if latest_sem:
+            worst_h = db.query(Institution, HRKPI.avg_teaching_load_hours).join(
+                HRKPI, HRKPI.institution_id == Institution.id
+            ).filter(HRKPI.semester == latest_sem).order_by(
+                HRKPI.avg_teaching_load_hours.desc()
+            ).first()
+            if worst_h:
+                wl_inst, _ = worst_h
+                wl_code = wl_inst.code
+                hr_rows = db.query(HRKPI).filter(
+                    HRKPI.institution_id == wl_inst.id
+                ).order_by(HRKPI.semester).all()
+                fc_hr = forecast_kpi(
+                    [_row_to_dict(r) for r in hr_rows], 'avg_teaching_load_hours', periods=2
+                )
 
-        return [
-            {
+        # ── Build response cards ──────────────────────────────────────────────
+        cards = []
+
+        if fc_dropout:
+            d_trend = fc_dropout['trend']
+            d_chg = abs(fc_dropout['change_pct'])
+            sev = ('critical' if fc_dropout['last_forecast'] > 12
+                   else 'warning' if d_trend == 'up' else 'info')
+            cards.append({
                 "id": "pred_dropout",
                 "title": "Risque Abandon — Réseau",
                 "icon": "🎓",
-                "severity": "warning",
-                "current_value": round(avg_dropout, 1),
+                "severity": sev,
+                "current_value": round(fc_dropout['last_actual'], 1),
                 "current_label": "Moy. réseau actuelle",
-                "predicted_value": round(avg_dropout * 1.31, 1),
-                "predicted_label": "Prévu S2 2026",
+                "predicted_value": round(fc_dropout['last_forecast'], 1),
+                "predicted_label": f"Prévu {_fc_label(fc_dropout['points'])}",
                 "unit": "%",
-                "confidence": 68,
-                "trend": "up",
-                "explanation": "Tendance haussière détectée sur 3 semestres. Facteurs : délais bourses, saturation résidences.",
-            },
-            {
+                "confidence": fc_dropout['confidence'],
+                "trend": d_trend,
+                "explanation": (
+                    f"Prophet détecte une tendance {'haussière' if d_trend == 'up' else 'baissière' if d_trend == 'down' else 'stable'} "
+                    f"de {d_chg}% sur le réseau. "
+                    "Facteurs corrélés : délais bourses, saturation résidences."
+                ),
+            })
+
+        if fc_budget:
+            b_trend = fc_budget['trend']
+            b_chg = abs(fc_budget['change_pct'])
+            overshoot = round(fc_budget['last_forecast'] - 100, 1)
+            sev = ('critical' if fc_budget['last_forecast'] > 100
+                   else 'warning' if b_trend == 'up' else 'info')
+            cards.append({
                 "id": "pred_budget",
                 "title": f"Budget {wb_code}",
                 "icon": "💰",
-                "severity": "critical",
-                "current_value": round(wb_val, 1),
+                "severity": sev,
+                "current_value": round(fc_budget['last_actual'], 1),
                 "current_label": "Exécution actuelle",
-                "predicted_value": round(wb_val * 1.15, 1),
-                "predicted_label": "Prévu juin 2026",
+                "predicted_value": round(fc_budget['last_forecast'], 1),
+                "predicted_label": f"Prévu {_fc_label(fc_budget['points'])}",
                 "unit": "%",
-                "confidence": 84,
-                "trend": "up",
-                "explanation": "Au rythme actuel, dépassement budgétaire de 14% prévu. Principaux postes : RH (61%) et infrastructure (28%).",
-            },
-            {
+                "confidence": fc_budget['confidence'],
+                "trend": b_trend,
+                "explanation": (
+                    f"Prophet prévoit {'un dépassement de ' + str(overshoot) + '% ' if overshoot > 0 else 'un taux de ' + str(round(fc_budget['last_forecast'], 1)) + '% '}"
+                    f"(évolution {b_chg}%). "
+                    "Principaux postes : RH (61%) et infrastructure (28%)."
+                ),
+            })
+
+        if fc_hr:
+            h_trend = fc_hr['trend']
+            h_chg = abs(fc_hr['change_pct'])
+            sev = ('critical' if fc_hr['last_forecast'] > 35
+                   else 'warning' if h_trend == 'up' else 'info')
+            cards.append({
                 "id": "pred_hr",
                 "title": f"Charge RH — {wl_code}",
                 "icon": "👥",
-                "severity": "info",
-                "current_value": round(wl_val, 1),
+                "severity": sev,
+                "current_value": round(fc_hr['last_actual'], 1),
                 "current_label": "Charge max actuelle",
-                "predicted_value": round(wl_val * 1.06, 1),
-                "predicted_label": "Prévu S2 2026",
+                "predicted_value": round(fc_hr['last_forecast'], 1),
+                "predicted_label": f"Prévu {_fc_label(fc_hr['points'])}",
                 "unit": "h/sem",
-                "confidence": 71,
-                "trend": "up",
-                "explanation": "Charge enseignante en hausse progressive. Risque de surcharge si aucun recrutement avant S2.",
-            },
-        ]
-    except Exception as e:
-        # Fallback to static data if DB query fails
+                "confidence": fc_hr['confidence'],
+                "trend": h_trend,
+                "explanation": (
+                    f"Charge enseignante en {'hausse' if h_trend == 'up' else 'baisse' if h_trend == 'down' else 'stabilisation'} "
+                    f"({h_chg}%). "
+                    "Risque de surcharge si aucun recrutement avant S2."
+                ),
+            })
+
+        if not cards:
+            raise ValueError("Prophet returned no forecasts")
+
+        return cards
+
+    except Exception:
+        # Static fallback if DB/Prophet unavailable
         return [
             {
                 "id": "pred_dropout", "title": "Risque Abandon — Réseau", "icon": "🎓",
@@ -593,51 +687,215 @@ def explain_alert(alert_id: int, db: Session = Depends(get_db)):
 
 
 # ─────────────────────────────────────────────────────────────
-# AI CHAT
+# AI CHAT — Agno multi-agent orchestrator (primary)
+#           Falls back to tool-use agent for deep DB/RAG queries
 # ─────────────────────────────────────────────────────────────
+
+def _build_context(db: Session) -> str:
+    """Build a rich text snapshot of current DB state for the Agno agents."""
+    institutions = db.query(Institution).filter(Institution.is_active == True).all()
+
+    avg_success = db.query(func.avg(AcademicKPI.success_rate)).scalar()
+    avg_dropout = db.query(func.avg(AcademicKPI.dropout_rate)).scalar()
+    avg_budget = db.query(func.avg(FinanceKPI.budget_execution_rate)).scalar()
+    active_alerts = db.query(Alert).filter(Alert.is_resolved == False).count()
+    critical_alerts = db.query(Alert).filter(
+        Alert.is_resolved == False, Alert.severity == "critical"
+    ).count()
+
+    latest_sem_row = db.query(AcademicKPI.semester).order_by(AcademicKPI.id.desc()).first()
+    latest_sem = latest_sem_row[0] if latest_sem_row else "S1_2026"
+
+    lines = [
+        f"=== RÉSEAU UCAR — Snapshot {latest_sem} ===",
+        f"Institutions actives : {len(institutions)}",
+        f"Alertes actives : {active_alerts} (dont {critical_alerts} critiques)",
+        f"Taux de réussite moyen : {round(float(avg_success), 2) if avg_success else 'N/A'}%",
+        f"Taux d'abandon moyen : {round(float(avg_dropout), 2) if avg_dropout else 'N/A'}%",
+        f"Taux d'exécution budgétaire moyen : {round(float(avg_budget), 2) if avg_budget else 'N/A'}%",
+        "",
+        "=== INSTITUTIONS (extrait) ===",
+    ]
+
+    for inst in institutions[:15]:
+        latest_acad = db.query(AcademicKPI).filter(
+            AcademicKPI.institution_id == inst.id
+        ).order_by(AcademicKPI.id.desc()).first()
+        latest_fin = db.query(FinanceKPI).filter(
+            FinanceKPI.institution_id == inst.id
+        ).order_by(FinanceKPI.id.desc()).first()
+        latest_hr = db.query(HRKPI).filter(
+            HRKPI.institution_id == inst.id
+        ).order_by(HRKPI.id.desc()).first()
+        inst_alerts = db.query(Alert).filter(
+            Alert.institution_id == inst.id, Alert.is_resolved == False
+        ).count()
+
+        line = f"- {inst.code} | {inst.name_fr} | {inst.governorate}"
+        if latest_acad:
+            line += (f" | Réussite:{float(latest_acad.success_rate or 0):.1f}%"
+                     f" Abandon:{float(latest_acad.dropout_rate or 0):.1f}%"
+                     f" Présence:{float(latest_acad.attendance_rate or 0):.1f}%")
+        if latest_fin:
+            line += f" | Budget:{float(latest_fin.budget_execution_rate or 0):.1f}%"
+        if latest_hr:
+            line += (f" | Absentéisme:{float(latest_hr.absenteeism_rate or 0):.1f}%"
+                     f" ChargeEns:{float(latest_hr.avg_teaching_load_hours or 0):.1f}h")
+        if inst_alerts:
+            line += f" | ⚠️ {inst_alerts} alerte(s)"
+        lines.append(line)
+
+    # Active alerts detail
+    alerts = db.query(Alert, Institution.name_fr).join(
+        Institution, Alert.institution_id == Institution.id
+    ).filter(Alert.is_resolved == False).order_by(Alert.created_at.desc()).limit(10).all()
+
+    if alerts:
+        lines.append("")
+        lines.append("=== ALERTES ACTIVES ===")
+        for a, inst_name in alerts:
+            lines.append(
+                f"[{a.severity.upper()}] {inst_name} — {a.title}"
+                f" (KPI: {a.kpi_name}={float(a.kpi_value or 0):.1f},"
+                f" seuil={float(a.threshold_value or 0):.1f})"
+            )
+
+    return "\n".join(lines)
+
 
 @router.post("/ai/chat", response_model=ChatResponse)
 def chat(request: ChatMessage, db: Session = Depends(get_db)):
-    # Build context from DB
-    institutions = db.query(Institution).filter(Institution.is_active == True).all()
-    active_alerts = db.query(Alert, Institution.name_fr).join(
-        Institution, Alert.institution_id == Institution.id
-    ).filter(Alert.is_resolved == False).all()
-    
-    avg_success = db.query(func.avg(AcademicKPI.success_rate)).scalar()
-    avg_budget = db.query(func.avg(FinanceKPI.budget_execution_rate)).scalar()
-    total_students = db.query(func.sum(Institution.student_capacity)).scalar() or 0
+    from agno.exceptions import InputCheckError, OutputCheckError
 
-    context = {
-        "institutions": [
-            {
-                "name_fr": i.name_fr,
-                "code": i.code,
-                "governorate": i.governorate,
-                "student_capacity": i.student_capacity,
-                "active_alerts": db.query(Alert).filter(
-                    Alert.institution_id == i.id, Alert.is_resolved == False
-                ).count()
-            }
-            for i in institutions
+    message = request.message.strip()
+    history = [{"role": h.role, "content": h.content} for h in request.history]
+
+    # ── Early user-message length guard (before building context) ─────────────
+    if len(message) > 2000:
+        return ChatResponse(
+            response="Message trop long (max 2000 caractères). Veuillez raccourcir votre question.",
+            blocked=True,
+            block_reason="message_too_long",
+            context_used="route_validation",
+        )
+
+    # ── Agno multi-agent orchestrator (analysis, benchmarks, forecasts, strategy)
+    try:
+        context = _build_context(db)
+
+        # Optionally enrich with RAG knowledge base results
+        rag_section = ""
+        try:
+            from services.rag_service import search as rag_search
+            rag_hits = rag_search(message, n_results=3)
+            if rag_hits:
+                rag_section = "\n=== BASE DOCUMENTAIRE (extraits pertinents) ===\n"
+                for hit in rag_hits:
+                    rag_section += f"[{hit['source']}] {hit['content'][:400]}\n"
+        except Exception:
+            pass
+
+        # Prepend last 4 history turns for conversational context
+        history_section = ""
+        if history:
+            history_section = "\n=== HISTORIQUE RÉCENT ===\n"
+            for h in history[-4:]:
+                prefix = "Utilisateur" if h["role"] == "user" else "Assistant"
+                history_section += f"{prefix}: {h['content'][:300]}\n"
+
+        prompt = f"{context}{rag_section}{history_section}\n=== QUESTION ===\n{message}"
+
+        result = orchestrator.run(prompt)
+
+        # Extract which agent handled the request
+        agent_used = "StrategicAdvisorAgent"
+        if getattr(result, "member_responses", None):
+            last = result.member_responses[-1]
+            agent_used = getattr(last, "agent_name", None) or getattr(last, "team_name", agent_used)
+
+        return ChatResponse(
+            response=result.content or "",
+            agent_used=agent_used,
+            context_used="agno_orchestrator",
+        )
+
+    except InputCheckError as e:
+        return ChatResponse(
+            response=str(e),
+            blocked=True,
+            block_reason=str(e.check_trigger),
+            context_used="guardrail_blocked",
+        )
+    except OutputCheckError as e:
+        return ChatResponse(
+            response="Réponse filtrée par les règles de sécurité.",
+            blocked=True,
+            block_reason="output_filtered",
+            context_used="guardrail_blocked",
+        )
+    except Exception as e:
+        # Fallback to tool-use agent on any Agno failure
+        try:
+            result = run_agent(message, history, db)
+            nav = result.get("navigation")
+            return ChatResponse(
+                response=result["response"],
+                navigation=nav,
+                actions=result.get("actions"),
+                agent_used="ToolUseAgent",
+                context_used="agent_fallback",
+            )
+        except Exception:
+            return ChatResponse(
+                response="Service IA temporairement indisponible.",
+                context_used="error",
+            )
+
+
+@router.get("/ai/agent-status")
+def agent_status():
+    """Returns the multi-agent system configuration and guardrail status."""
+    return {
+        "orchestrator": "UCAR Orchestrator",
+        "mode": "route",
+        "agents": [
+            {"name": "AlertInvestigatorAgent", "role": "Anomalies & cross-KPI correlations"},
+            {"name": "ForecastAgent", "role": "Trend interpretation & risk communication"},
+            {"name": "BenchmarkAgent", "role": "Rankings & gap analysis"},
+            {"name": "StrategicAdvisorAgent", "role": "Executive synthesis & recommendations"},
         ],
-        "alerts": [
-            {
-                "institution_name": inst_name,
-                "severity": a.severity,
-                "domain": a.domain,
-                "title": a.title,
-                "kpi_value": float(a.kpi_value or 0)
-            }
-            for a, inst_name in active_alerts
+        "guardrails": [
+            "LengthGuardrail (user message max 2000 chars, agent input max 50k)",
+            "PromptInjectionGuardrail (FR+EN patterns)",
+            "PIIDetectionGuardrail (email, phone, CIN, RIB)",
+            "DomainScopeGuardrail (UCAR topics only)",
+            "SecretScrubber (output)",
         ],
-        "avg_success_rate": round(float(avg_success), 2) if avg_success else None,
-        "avg_budget_execution": round(float(avg_budget), 2) if avg_budget else None,
-        "total_students": int(total_students),
+        "fallback": "ToolUseAgent (agent_service + ai_provider)",
     }
 
-    response_text = answer_data_question(request.message, context)
-    return ChatResponse(response=response_text, context_used="dashboard_global")
+
+@router.post("/ai/ingest-pdfs")
+def ingest_pdfs():
+    """Trigger ingestion of all PDFs in the rag_dataset directory into ChromaDB."""
+    try:
+        from services.rag_service import ingest_directory
+        result = ingest_directory()
+        # Normalise: always return the expected keys even on error
+        if "error" in result:
+            return {"ingested": 0, "skipped": 0, "total_docs": 0, "errors": [result["error"]],
+                    "message": result.get("message", "")}
+        return result
+    except Exception as e:
+        return {"ingested": 0, "skipped": 0, "total_docs": 0,
+                "errors": [f"Service RAG indisponible: {str(e)}"]}
+
+
+@router.get("/ai/rag-stats")
+def rag_stats():
+    """Return stats about the RAG knowledge base."""
+    from services.rag_service import get_stats
+    return get_stats()
 
 
 # ─────────────────────────────────────────────────────────────
