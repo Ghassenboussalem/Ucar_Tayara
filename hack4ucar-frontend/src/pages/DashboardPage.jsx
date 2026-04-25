@@ -2,14 +2,28 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts'
 import { getDashboard, getAlerts, resolveAlert, explainAlert } from '../api/client'
-import { Building2, Users, Bell, TrendingUp, AlertTriangle, CheckCircle, ChevronRight, Sparkles, RefreshCw } from 'lucide-react'
+import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical } from 'lucide-react'
+import client from '../api/client'
+import WhatIfPanel from '../components/WhatIfPanel'
 
 // Mini sparkline data helper
 function mkSpark(base, n = 8) {
   return Array.from({ length: n }, (_, i) => ({ v: base + (Math.random() - 0.45) * base * 0.12 + i * base * 0.008 }))
 }
 
-function StatCard({ icon: Icon, label, value, sub, color, spark }) {
+function DeltaBadge({ delta, unit = 'pts' }) {
+  if (delta == null) return null
+  const up = delta > 0
+  const color = up ? '#dc2626' : '#059669'
+  const icon = up ? '↑' : '↓'
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', padding: '2px 7px', borderRadius: '6px', background: color + '12', color, fontSize: '0.7rem', fontWeight: 700 }}>
+      {icon} {up ? '+' : ''}{delta.toFixed(1)}{unit}
+    </span>
+  )
+}
+
+function StatCard({ icon: Icon, label, value, sub, color, spark, delta, deltaUnit }) {
   return (
     <div style={{ ...S.card, borderTop: `3px solid ${color}` }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
@@ -27,7 +41,10 @@ function StatCard({ icon: Icon, label, value, sub, color, spark }) {
           </div>
         )}
       </div>
-      <div style={S.cardValue}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
+        <div style={S.cardValue}>{value}</div>
+        {delta != null && <DeltaBadge delta={delta} unit={deltaUnit || 'pts'} />}
+      </div>
       <div style={S.cardLabel}>{label}</div>
       {sub && <div style={S.cardSub}>{sub}</div>}
     </div>
@@ -52,12 +69,52 @@ function SeverityBadge({ severity }) {
   return <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
 }
 
+function PredictionCard({ pred }) {
+  const sevColors = { critical: '#dc2626', warning: '#f59e0b', info: '#3b82f6' }
+  const color = sevColors[pred.severity] || '#3b82f6'
+  return (
+    <div style={{ background: 'white', borderRadius: '12px', padding: '18px', border: '1px solid #e2e8f0', borderLeft: `4px solid ${color}`, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '1.2rem' }}>{pred.icon}</span>
+          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>{pred.title}</span>
+        </div>
+        <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: color + '12', color }}>{pred.confidence}% confiance</span>
+      </div>
+      <div style={{ display: 'flex', gap: '16px', alignItems: 'baseline' }}>
+        <div>
+          <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600 }}>{pred.current_label}</div>
+          <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a' }}>{pred.current_value}{pred.unit}</div>
+        </div>
+        <div style={{ color: '#94a3b8', fontSize: '1.2rem' }}>→</div>
+        <div>
+          <div style={{ fontSize: '0.68rem', color: '#94a3b8', fontWeight: 600 }}>{pred.predicted_label}</div>
+          <div style={{ fontSize: '1.3rem', fontWeight: 800, color }}>
+            {pred.predicted_value}{pred.unit}
+            <span style={{ fontSize: '0.82rem', marginLeft: '4px' }}>{pred.trend === 'up' ? '↑' : '↓'}</span>
+          </div>
+        </div>
+      </div>
+      <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5, background: '#f8fafc', padding: '8px 10px', borderRadius: '6px' }}>
+        💡 {pred.explanation}
+      </div>
+      {pred.onSimulate && (
+        <button onClick={pred.onSimulate} style={{ marginTop: '8px', padding: '5px 12px', borderRadius: '7px', border: '1px solid rgba(29,83,148,0.2)', background: 'rgba(29,83,148,0.05)', color: 'rgb(29,83,148)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'Inter,sans-serif', display: 'flex', alignItems: 'center', gap: '5px', width: '100%', justifyContent: 'center' }}>
+          <FlaskConical size={13} /> Simuler une intervention
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const [dash, setDash] = useState(null)
   const [alerts, setAlerts] = useState([])
+  const [predictions, setPredictions] = useState([])
   const [loading, setLoading] = useState(true)
   const [explanation, setExplanation] = useState({})
+  const [whatIfScenario, setWhatIfScenario] = useState(null)
   const [explaining, setExplaining] = useState({})
 
   async function load() {
@@ -66,6 +123,8 @@ export default function DashboardPage() {
       const [d, a] = await Promise.all([getDashboard(), getAlerts({ resolved: false })])
       setDash(d)
       setAlerts(a.slice(0, 7))
+      // Load predictions separately (non-blocking)
+      try { const p = await client.get('/predictions').then(r => r.data); setPredictions(p) } catch {}
     } catch { /* backend offline */ }
     setLoading(false)
   }
@@ -120,9 +179,27 @@ export default function DashboardPage() {
       <div style={S.kpiGrid}>
         <StatCard icon={Building2} label="Institutions actives" value={totalInst} sub="Réseau UCAR complet" color="rgb(29,83,148)" spark={mkSpark(totalInst)} />
         <StatCard icon={Users} label="Étudiants suivis" value={(totalStudents / 1000).toFixed(1) + 'k'} sub="Capacité totale" color="#0891b2" spark={mkSpark(totalStudents)} />
-        <StatCard icon={TrendingUp} label="Taux de réussite moy." value={avgSuccess + '%'} sub="Tous établissements" color="#059669" spark={mkSpark(avgSuccess)} />
+        <StatCard icon={TrendingUp} label="Taux de réussite moy." value={avgSuccess + '%'} sub="vs réseau" color="#059669" spark={mkSpark(avgSuccess)} delta={1.7} deltaUnit="pts" />
         <StatCard icon={Bell} label="Alertes actives" value={activeAlerts} sub={`dont ${dash?.critical_alerts || 0} critiques`} color={activeAlerts > 3 ? '#dc2626' : '#f59e0b'} spark={mkSpark(activeAlerts + 2)} />
       </div>
+
+      {/* Predictions Panel */}
+      {predictions.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
+            <Brain size={18} color="rgb(29,83,148)" />
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>Prévisions IA</h3>
+            <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)' }}>Prédictif</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
+            {predictions.map((p) => {
+              const scenarioMap = { pred_dropout: 'dropout', pred_budget: 'budget' }
+              const scenario = scenarioMap[p.id]
+              return <PredictionCard key={p.id} pred={{ ...p, onSimulate: scenario ? () => setWhatIfScenario(scenario) : undefined }} />
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Bottom grid: institutions + alerts */}
       <div style={S.bottomGrid}>
@@ -210,6 +287,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      {whatIfScenario && <WhatIfPanel scenario={whatIfScenario} onClose={() => setWhatIfScenario(null)} />}
     </div>
   )
 }

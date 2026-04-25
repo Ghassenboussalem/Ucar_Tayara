@@ -165,6 +165,52 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
         Alert.is_resolved == False
     ).all()
 
+    # Compute network averages for benchmarking
+    latest_semester = db.query(AcademicKPI.semester).order_by(AcademicKPI.id.desc()).first()
+    latest_sem = latest_semester[0] if latest_semester else None
+
+    net_avg_academic = {}
+    if latest_sem:
+        avg_row = db.query(
+            func.avg(AcademicKPI.success_rate),
+            func.avg(AcademicKPI.dropout_rate),
+            func.avg(AcademicKPI.attendance_rate),
+        ).filter(AcademicKPI.semester == latest_sem).first()
+        if avg_row:
+            net_avg_academic = {
+                "success_rate": round(float(avg_row[0] or 0), 2),
+                "dropout_rate": round(float(avg_row[1] or 0), 2),
+                "attendance_rate": round(float(avg_row[2] or 0), 2),
+            }
+
+    latest_fy = db.query(FinanceKPI.fiscal_year).order_by(FinanceKPI.id.desc()).first()
+    latest_fy_val = latest_fy[0] if latest_fy else None
+    net_avg_finance = {}
+    if latest_fy_val:
+        avg_fin = db.query(
+            func.avg(FinanceKPI.budget_execution_rate),
+            func.avg(FinanceKPI.cost_per_student),
+        ).filter(FinanceKPI.fiscal_year == latest_fy_val).first()
+        if avg_fin:
+            net_avg_finance = {
+                "budget_execution_rate": round(float(avg_fin[0] or 0), 2),
+                "cost_per_student": round(float(avg_fin[1] or 0), 2),
+            }
+
+    net_avg_hr = {}
+    if latest_sem:
+        avg_hr = db.query(
+            func.avg(HRKPI.absenteeism_rate),
+            func.avg(HRKPI.avg_teaching_load_hours),
+            func.avg(HRKPI.staff_turnover_rate),
+        ).filter(HRKPI.semester == latest_sem).first()
+        if avg_hr:
+            net_avg_hr = {
+                "absenteeism_rate": round(float(avg_hr[0] or 0), 2),
+                "avg_teaching_load_hours": round(float(avg_hr[1] or 0), 2),
+                "staff_turnover_rate": round(float(avg_hr[2] or 0), 2),
+            }
+
     return {
         "institution": {
             "id": inst.id,
@@ -180,7 +226,223 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
         "finance": [_row_to_dict(f) for f in finance],
         "hr": [_row_to_dict(h) for h in hr],
         "alerts": [_alert_to_dict(a) for a in alerts],
+        "network_avg": {
+            "academic": net_avg_academic,
+            "finance": net_avg_finance,
+            "hr": net_avg_hr,
+        },
     }
+
+
+# ─────────────────────────────────────────────────────────────
+# PREDICTIONS (pre-computed from context/13-demo-data-strategy)
+# ─────────────────────────────────────────────────────────────
+
+@router.get("/predictions")
+def get_predictions(db: Session = Depends(get_db)):
+    """Return pre-computed predictive risk forecasts for the dashboard."""
+    try:
+        # Compute real current values from DB
+        latest_sem_row = db.query(AcademicKPI.semester).order_by(AcademicKPI.id.desc()).first()
+        latest_sem = latest_sem_row[0] if latest_sem_row else "S1_2026"
+
+        avg_dropout_raw = db.query(func.avg(AcademicKPI.dropout_rate)).filter(
+            AcademicKPI.semester == latest_sem
+        ).scalar()
+        avg_dropout = float(avg_dropout_raw) if avg_dropout_raw else 6.2
+
+        # Find the institution with worst budget execution
+        worst_budget_row = db.query(
+            Institution.code, FinanceKPI.budget_execution_rate
+        ).join(FinanceKPI, FinanceKPI.institution_id == Institution.id).order_by(
+            FinanceKPI.budget_execution_rate.desc()
+        ).first()
+
+        wb_code = worst_budget_row[0] if worst_budget_row else "IHEC"
+        wb_val = float(worst_budget_row[1]) if worst_budget_row and worst_budget_row[1] else 88.0
+
+        # Find institution with worst teaching load
+        worst_load_row = db.query(
+            Institution.code, HRKPI.avg_teaching_load_hours
+        ).join(HRKPI, HRKPI.institution_id == Institution.id).filter(
+            HRKPI.semester == latest_sem
+        ).order_by(HRKPI.avg_teaching_load_hours.desc()).first()
+
+        wl_code = worst_load_row[0] if worst_load_row else "INSAT"
+        wl_val = float(worst_load_row[1]) if worst_load_row and worst_load_row[1] else 31.2
+
+        return [
+            {
+                "id": "pred_dropout",
+                "title": "Risque Abandon — Réseau",
+                "icon": "🎓",
+                "severity": "warning",
+                "current_value": round(avg_dropout, 1),
+                "current_label": "Moy. réseau actuelle",
+                "predicted_value": round(avg_dropout * 1.31, 1),
+                "predicted_label": "Prévu S2 2026",
+                "unit": "%",
+                "confidence": 68,
+                "trend": "up",
+                "explanation": "Tendance haussière détectée sur 3 semestres. Facteurs : délais bourses, saturation résidences.",
+            },
+            {
+                "id": "pred_budget",
+                "title": f"Budget {wb_code}",
+                "icon": "💰",
+                "severity": "critical",
+                "current_value": round(wb_val, 1),
+                "current_label": "Exécution actuelle",
+                "predicted_value": round(wb_val * 1.15, 1),
+                "predicted_label": "Prévu juin 2026",
+                "unit": "%",
+                "confidence": 84,
+                "trend": "up",
+                "explanation": "Au rythme actuel, dépassement budgétaire de 14% prévu. Principaux postes : RH (61%) et infrastructure (28%).",
+            },
+            {
+                "id": "pred_hr",
+                "title": f"Charge RH — {wl_code}",
+                "icon": "👥",
+                "severity": "info",
+                "current_value": round(wl_val, 1),
+                "current_label": "Charge max actuelle",
+                "predicted_value": round(wl_val * 1.06, 1),
+                "predicted_label": "Prévu S2 2026",
+                "unit": "h/sem",
+                "confidence": 71,
+                "trend": "up",
+                "explanation": "Charge enseignante en hausse progressive. Risque de surcharge si aucun recrutement avant S2.",
+            },
+        ]
+    except Exception as e:
+        # Fallback to static data if DB query fails
+        return [
+            {
+                "id": "pred_dropout", "title": "Risque Abandon — Réseau", "icon": "🎓",
+                "severity": "warning", "current_value": 6.2, "current_label": "Moy. réseau actuelle",
+                "predicted_value": 8.1, "predicted_label": "Prévu S2 2026", "unit": "%",
+                "confidence": 68, "trend": "up",
+                "explanation": "Tendance haussière détectée sur 3 semestres.",
+            },
+            {
+                "id": "pred_budget", "title": "Budget IHEC", "icon": "💰",
+                "severity": "critical", "current_value": 88.0, "current_label": "Exécution actuelle",
+                "predicted_value": 101.0, "predicted_label": "Prévu juin 2026", "unit": "%",
+                "confidence": 84, "trend": "up",
+                "explanation": "Au rythme actuel, dépassement budgétaire de 14% prévu.",
+            },
+            {
+                "id": "pred_hr", "title": "Charge RH — INSAT", "icon": "👥",
+                "severity": "info", "current_value": 31.2, "current_label": "Charge max actuelle",
+                "predicted_value": 33.1, "predicted_label": "Prévu S2 2026", "unit": "h/sem",
+                "confidence": 71, "trend": "up",
+                "explanation": "Charge enseignante en hausse progressive.",
+            },
+        ]
+
+
+# ─────────────────────────────────────────────────────────────
+# CAUSAL CONTEXT (from context/10-causal-graph-forecast-agent)
+# ─────────────────────────────────────────────────────────────
+
+# Causal graph encoded from file 10 — node → upstream causes + downstream effects
+CAUSAL_GRAPH = {
+    "dropout_rate": {
+        "label": "Taux d'abandon",
+        "domain": "academic",
+        "causes": [
+            {"kpi": "scholarship_delay", "label": "Délai traitement bourses", "lag_weeks": 2, "strength": 0.72},
+            {"kpi": "residence_occupancy", "label": "Taux occupation résidences", "lag_weeks": 1, "strength": 0.58},
+            {"kpi": "avg_teaching_load_hours", "label": "Charge enseignante excessive", "lag_weeks": 3, "strength": 0.44},
+        ],
+        "effects": [
+            {"kpi": "success_rate", "label": "Taux de réussite", "lag_weeks": 6, "direction": "down"},
+            {"kpi": "avg_grade", "label": "Note moyenne", "lag_weeks": 4, "direction": "down"},
+        ],
+        "recommendation": "Prioriser le déblocage des bourses en attente et augmenter les places en résidence.",
+    },
+    "success_rate": {
+        "label": "Taux de réussite",
+        "domain": "academic",
+        "causes": [
+            {"kpi": "dropout_rate", "label": "Taux d'abandon", "lag_weeks": 0, "strength": -0.81},
+            {"kpi": "avg_teaching_load_hours", "label": "Charge enseignante", "lag_weeks": 1, "strength": -0.52},
+            {"kpi": "attendance_rate", "label": "Taux de présence", "lag_weeks": 0, "strength": 0.69},
+        ],
+        "effects": [
+            {"kpi": "institution_reputation", "label": "Attractivité institutionnelle", "lag_weeks": 52, "direction": "up"},
+        ],
+        "recommendation": "Renforcer l'encadrement pédagogique et réduire les absences non justifiées.",
+    },
+    "attendance_rate": {
+        "label": "Taux de présence",
+        "domain": "academic",
+        "causes": [
+            {"kpi": "dropout_rate", "label": "Risque d'abandon", "lag_weeks": 2, "strength": -0.61},
+            {"kpi": "avg_teaching_load_hours", "label": "Surcharge enseignante", "lag_weeks": 1, "strength": -0.38},
+        ],
+        "effects": [
+            {"kpi": "success_rate", "label": "Taux de réussite", "lag_weeks": 0, "direction": "up"},
+        ],
+        "recommendation": "Mettre en place un suivi hebdomadaire des absences avec alertes automatiques.",
+    },
+    "budget_execution_rate": {
+        "label": "Taux d'exécution budgétaire",
+        "domain": "finance",
+        "causes": [
+            {"kpi": "staff_budget_pct", "label": "Part budget RH", "lag_weeks": 0, "strength": 0.68},
+            {"kpi": "infrastructure_budget_pct", "label": "Part budget infrastructure", "lag_weeks": 4, "strength": 0.45},
+            {"kpi": "total_teaching_staff", "label": "Recrutements enseignants", "lag_weeks": 8, "strength": 0.39},
+        ],
+        "effects": [
+            {"kpi": "cost_per_student", "label": "Coût par étudiant", "lag_weeks": 4, "direction": "up"},
+            {"kpi": "avg_teaching_load_hours", "label": "Charge enseignante", "lag_weeks": 12, "direction": "up"},
+        ],
+        "recommendation": "Réallouer les lignes budgétaires infrastructure non consommées avant clôture.",
+    },
+    "absenteeism_rate": {
+        "label": "Taux d'absentéisme RH",
+        "domain": "hr",
+        "causes": [
+            {"kpi": "avg_teaching_load_hours", "label": "Surcharge horaire", "lag_weeks": 3, "strength": 0.67},
+            {"kpi": "staff_turnover_rate", "label": "Turnover du personnel", "lag_weeks": 6, "strength": 0.51},
+        ],
+        "effects": [
+            {"kpi": "attendance_rate", "label": "Présence étudiante", "lag_weeks": 2, "direction": "down"},
+            {"kpi": "success_rate", "label": "Taux de réussite", "lag_weeks": 4, "direction": "down"},
+        ],
+        "recommendation": "Redistribuer la charge enseignante et initier un programme de bien-être au travail.",
+    },
+    "avg_teaching_load_hours": {
+        "label": "Charge enseignante moyenne",
+        "domain": "hr",
+        "causes": [
+            {"kpi": "total_teaching_staff", "label": "Effectif enseignant", "lag_weeks": 0, "strength": -0.74},
+            {"kpi": "budget_execution_rate", "label": "Dépassement budgétaire", "lag_weeks": 12, "strength": 0.43},
+        ],
+        "effects": [
+            {"kpi": "absenteeism_rate", "label": "Absentéisme RH", "lag_weeks": 3, "direction": "up"},
+            {"kpi": "dropout_rate", "label": "Taux d'abandon", "lag_weeks": 3, "direction": "up"},
+        ],
+        "recommendation": "Recruter au moins 3 enseignants contractuels pour ramener la charge sous 24h/semaine.",
+    },
+}
+
+@router.get("/causal/{kpi_name}")
+def get_causal_context(kpi_name: str):
+    """Return causal chain for a given KPI from the encoded causal graph."""
+    node = CAUSAL_GRAPH.get(kpi_name)
+    if not node:
+        # Return generic response for unknown KPIs
+        return {
+            "kpi": kpi_name,
+            "label": kpi_name.replace("_", " ").title(),
+            "causes": [],
+            "effects": [],
+            "recommendation": "Analyser les tendances sur plusieurs semestres pour identifier les facteurs causaux.",
+        }
+    return {"kpi": kpi_name, **node}
 
 
 # ─────────────────────────────────────────────────────────────

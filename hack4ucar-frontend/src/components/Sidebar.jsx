@@ -7,6 +7,19 @@ import {
   LogOut,
   ChevronRight,
   TrendingUp,
+  Lock,
+  FlaskConical,
+  Handshake,
+  HeartPulse,
+  HardHat,
+  Cpu,
+  Package,
+  BookOpen,
+  Leaf,
+  Target,
+  Truck,
+  GraduationCap,
+  ClipboardList,
 } from 'lucide-react'
 
 const NAV = [
@@ -29,6 +42,21 @@ const NAV = [
       { to: '/reports', icon: FileText, label: 'Rapports' },
     ],
   },
+]
+
+const COMING_SOON_MODULES = [
+  { icon: FlaskConical, label: 'Recherche' },
+  { icon: Handshake, label: 'Partenariats' },
+  { icon: HeartPulse, label: 'Vie Étudiante' },
+  { icon: HardHat, label: 'Infrastructure' },
+  { icon: Cpu, label: 'Équipements' },
+  { icon: Package, label: 'Inventaire' },
+  { icon: BookOpen, label: 'Formation Continue' },
+  { icon: Leaf, label: 'ESG / RSE' },
+  { icon: Target, label: 'Stratégie' },
+  { icon: Truck, label: 'Logistique' },
+  { icon: GraduationCap, label: 'Pédagogie' },
+  { icon: ClipboardList, label: 'Scolarité' },
 ]
 
 export default function Sidebar() {
@@ -86,6 +114,18 @@ export default function Sidebar() {
             ))}
           </div>
         ))}
+
+        {/* Coming soon modules */}
+        <div style={styles.navGroup}>
+          <div style={styles.navSection}>Modules à venir</div>
+          {COMING_SOON_MODULES.map((mod) => (
+            <div key={mod.label} style={styles.lockedItem}>
+              <mod.icon size={15} style={{ flexShrink: 0, opacity: 0.35 }} />
+              <span style={styles.lockedLabel}>{mod.label}</span>
+              <Lock size={11} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+            </div>
+          ))}
+        </div>
       </nav>
 
       {/* Spacer */}
@@ -207,6 +247,21 @@ const styles = {
     fontWeight: 600,
   },
   navLabel: { flex: 1 },
+  lockedItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '6px 10px',
+    borderRadius: '8px',
+    color: 'rgba(255,255,255,0.28)',
+    fontSize: '0.78rem',
+    fontWeight: 500,
+    cursor: 'default',
+  },
+  lockedLabel: {
+    flex: 1,
+    opacity: 0.7,
+  },
   aiTag: {
     margin: '8px 10px 12px',
     padding: '10px 12px',

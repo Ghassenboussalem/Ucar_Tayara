@@ -1,9 +1,18 @@
 import { useState, useEffect } from 'react'
 import { getInstitutions, generateReport } from '../api/client'
-import { FileText, Download, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { FileText, Download, FileSpreadsheet, Loader2, Clock, Trash2 } from 'lucide-react'
 
 const PERIODS_ACADEMIC = ['S1_2025', 'S2_2025', 'S1_2026']
 const PERIODS_FINANCE  = ['2025', '2026']
+
+const REPORT_HISTORY_KEY = 'ucar_report_history'
+
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem(REPORT_HISTORY_KEY) || '[]') } catch { return [] }
+}
+function saveHistory(h) {
+  localStorage.setItem(REPORT_HISTORY_KEY, JSON.stringify(h.slice(0, 10)))
+}
 
 export default function ReportsPage() {
   const [institutions, setInstitutions] = useState([])
@@ -13,6 +22,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
+  const [history, setHistory] = useState(getHistory())
 
   useEffect(() => {
     getInstitutions().then((d) => {
@@ -20,8 +30,6 @@ export default function ReportsPage() {
       if (d.length) setInstId(String(d[0].id))
     }).catch(() => {})
   }, [])
-
-  const periods = format === 'excel' ? [...PERIODS_ACADEMIC, ...PERIODS_FINANCE] : [...PERIODS_ACADEMIC, ...PERIODS_FINANCE]
 
   async function handleGenerate() {
     if (!instId || !period) { setError('Veuillez sélectionner une institution et une période.'); return }
@@ -32,15 +40,33 @@ export default function ReportsPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       const inst = institutions.find((i) => String(i.id) === instId)
-      a.href = url
-      a.download = `rapport_${inst?.code || instId}_${period}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
-      a.click()
+      const filename = `rapport_${inst?.code || instId}_${period}.${format === 'pdf' ? 'pdf' : 'xlsx'}`
+      a.href = url; a.download = filename; a.click()
       URL.revokeObjectURL(url)
-      setSuccess(`✅ Rapport ${format.toUpperCase()} généré et téléchargé avec succès.`)
+      setSuccess(`✅ Rapport ${format.toUpperCase()} généré et téléchargé.`)
+
+      // Save to history
+      const entry = {
+        id: Date.now(),
+        institution_code: inst?.code || instId,
+        institution_name: inst?.name_fr || '',
+        period,
+        format: format.toUpperCase(),
+        filename,
+        generated_at: new Date().toISOString(),
+      }
+      const newHistory = [entry, ...history]
+      setHistory(newHistory)
+      saveHistory(newHistory)
     } catch {
       setError('Erreur lors de la génération. Vérifiez que le backend est actif.')
     }
     setLoading(false)
+  }
+
+  function clearHistory() {
+    setHistory([])
+    localStorage.removeItem(REPORT_HISTORY_KEY)
   }
 
   const selectedInst = institutions.find((i) => String(i.id) === instId)
@@ -106,7 +132,7 @@ export default function ReportsPage() {
           </button>
         </div>
 
-        {/* Preview card */}
+        {/* Right column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: 'linear-gradient(135deg, rgb(20,58,105), rgb(29,83,148))', borderRadius: '14px', padding: '24px', color: 'white' }}>
             <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6, marginBottom: '8px' }}>Aperçu du rapport</div>
@@ -142,6 +168,44 @@ export default function ReportsPage() {
           </div>
         </div>
       </div>
+
+      {/* Report History (P2-9) */}
+      {history.length > 0 && (
+        <div style={{ background: 'white', borderRadius: '14px', padding: '20px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={16} color="rgb(29,83,148)" />
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>Rapports récents</h3>
+              <span style={{ padding: '2px 8px', borderRadius: '99px', background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)', fontSize: '0.68rem', fontWeight: 700 }}>{history.length}</span>
+            </div>
+            <button onClick={clearHistory} style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: 'white', fontSize: '0.72rem', color: '#94a3b8', cursor: 'pointer', fontFamily: 'Inter,sans-serif' }}>
+              <Trash2 size={12} /> Effacer
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {history.slice(0, 5).map((entry) => (
+              <div key={entry.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '8px', border: '1px solid #f1f5f9', background: '#fafbff' }}>
+                {entry.format === 'PDF'
+                  ? <FileText size={18} color="#dc2626" style={{ flexShrink: 0 }} />
+                  : <FileSpreadsheet size={18} color="#059669" style={{ flexShrink: 0 }} />
+                }
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: '#0f172a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {entry.institution_name || entry.institution_code}
+                    <span style={{ marginLeft: '6px', padding: '1px 6px', borderRadius: '4px', background: '#f1f5f9', fontSize: '0.68rem', fontWeight: 700, color: '#64748b' }}>{entry.period}</span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>
+                    {new Date(entry.generated_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </div>
+                <span style={{ padding: '2px 8px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 700, background: entry.format === 'PDF' ? '#fef2f2' : '#f0fdf4', color: entry.format === 'PDF' ? '#dc2626' : '#059669' }}>
+                  {entry.format}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
