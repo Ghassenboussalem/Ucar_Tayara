@@ -8,6 +8,8 @@ import {
   ChevronRight,
   TrendingUp,
   Lock,
+  Network,
+  Map,
   FlaskConical,
   Handshake,
   HeartPulse,
@@ -33,6 +35,7 @@ const NAV = [
     section: 'Données',
     items: [
       { to: '/institutions', icon: Building2, label: 'Institutions' },
+      { to: '/map', icon: Map, label: 'Carte des institutions' },
       { to: '/alerts', icon: Bell, label: 'Alertes', badge: true },
     ],
   },
@@ -40,6 +43,7 @@ const NAV = [
     section: 'Intelligence',
     items: [
       { to: '/reports', icon: FileText, label: 'Rapports' },
+      { to: '/causal', icon: Network, label: 'Graphe Causal' },
     ],
   },
 ]

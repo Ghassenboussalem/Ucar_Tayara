@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { X, Send, Sparkles, RotateCcw } from 'lucide-react'
+import { X, Send, Sparkles, RotateCcw, Loader2 } from 'lucide-react'
 import { sendChat } from '../api/client'
 
 const SUGGESTED = [
@@ -85,7 +85,7 @@ export default function AIChatDrawer({ open, onClose }) {
             <div key={i} style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: '8px' }}>
               {!isUser && <div style={S.aiAvatar}><Sparkles size={12} /></div>}
               <div style={{ ...S.bubble, ...(isUser ? S.bubbleUser : S.bubbleAI) }}>
-                {msg.loading ? '⏳ Analyse en cours…' : msg.content}
+                {msg.loading ? <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Analyse en cours…</span> : msg.content}
               </div>
             </div>
           )

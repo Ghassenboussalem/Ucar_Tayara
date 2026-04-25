@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../api/client'
+import { AlertTriangle } from 'lucide-react'
 
 export default function LoginPage() {
   const navigate = useNavigate()
@@ -82,7 +83,7 @@ export default function LoginPage() {
 
           {error && (
             <div style={styles.errorBanner}>
-              <span>⚠</span> {error}
+              <AlertTriangle size={16} /> {error}
             </div>
           )}
 

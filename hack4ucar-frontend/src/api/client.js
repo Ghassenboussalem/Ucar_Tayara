@@ -71,6 +71,13 @@ export const explainAlert = (id) =>
 export const sendChat = (message, institution_id = null) =>
   client.post('/ai/chat', { message, institution_id }).then((r) => r.data)
 
+// ── Causal Graph ─────────────────────────────────────────────
+export const getCausalGraph = () =>
+  client.get('/causal/graph/all').then((r) => r.data)
+
+export const getCausalDetail = (kpiName) =>
+  client.get(`/causal/${kpiName}`).then((r) => r.data)
+
 // ── Reports ───────────────────────────────────────────────────
 export const generateReport = (institution_id, period, format, report_type = 'monthly') =>
   client.post(
