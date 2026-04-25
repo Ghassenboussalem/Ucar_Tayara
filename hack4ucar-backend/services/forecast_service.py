@@ -19,6 +19,12 @@ SEM_TO_DATE = {
     'S2_2025': '2025-09-15',
     'S1_2026': '2026-02-15',
     'S2_2026': '2026-09-15',
+    # Finance fiscal years (annual data — use mid-year)
+    '2023': '2023-06-30',
+    '2024': '2024-06-30',
+    '2025': '2025-06-30',
+    '2026': '2026-06-30',
+    '2027': '2027-06-30',
 }
 
 DATE_TO_SEM = {v: k for k, v in SEM_TO_DATE.items()}
@@ -54,10 +60,14 @@ def forecast_kpi(
         if sem and val is not None and sem in SEM_TO_DATE:
             rows.append({'ds': SEM_TO_DATE[sem], 'y': float(val)})
 
-    if len(rows) < 3:
-        return None  # Prophet needs at least 3 data points
+    if len(rows) < 2:
+        return None  # need at least 2 points for linear fallback
 
+    # Prophet needs 3+ points; with 2 go straight to linear fallback
     df = pd.DataFrame(rows).sort_values('ds').drop_duplicates('ds')
+
+    if len(df) < 3:
+        return _linear_fallback(df, kpi_field, periods)
 
     try:
         model = Prophet(
@@ -154,16 +164,29 @@ def _linear_fallback(df: pd.DataFrame, kpi_field: str, periods: int) -> dict:
             'is_forecast': False,
         })
 
-    # Add future periods
+    # Add future periods — detect annual (fiscal year) vs semester cadence
     last_date = pd.Timestamp(dates[-1])
-    sem_keys = list(SEM_TO_DATE.keys())
     last_sem_date = str(last_date.date())
-    last_sem_idx = list(SEM_TO_DATE.values()).index(last_sem_date) if last_sem_date in list(SEM_TO_DATE.values()) else -1
+    all_values = list(SEM_TO_DATE.values())
+    all_keys = list(SEM_TO_DATE.keys())
+    last_idx = all_values.index(last_sem_date) if last_sem_date in all_values else -1
+    last_label = DATE_TO_SEM.get(last_sem_date, '')
 
     for j in range(1, periods + 1):
         fi = len(x) + j - 1
         predicted = m * fi + b
-        sem_label = sem_keys[last_sem_idx + j] if last_sem_idx + j < len(sem_keys) else f'Prév. {j}'
+        if last_idx >= 0 and last_idx + j < len(all_keys):
+            sem_label = all_keys[last_idx + j]
+        elif last_label.isdigit():
+            sem_label = str(int(last_label) + j)
+        elif last_label.startswith('S1_'):
+            year = int(last_label[3:])
+            sem_label = f'S2_{year}' if j % 2 == 1 else f'S1_{year + j // 2}'
+        elif last_label.startswith('S2_'):
+            year = int(last_label[3:])
+            sem_label = f'S1_{year + (j + 1) // 2}' if j % 2 == 1 else f'S2_{year + j // 2}'
+        else:
+            sem_label = f'Prév. {j}'
         points.append({
             'name': sem_label,
             'actual': None,
