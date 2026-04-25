@@ -501,6 +501,18 @@ CAUSAL_GRAPH = {
     },
 }
 
+@router.get("/causal/graph/all")
+def get_full_causal_graph():
+    """Return all nodes and edges of the causal graph."""
+    nodes = [{"id": k, "label": v["label"], "domain": v["domain"]} for k, v in CAUSAL_GRAPH.items()]
+    edges = [
+        {"source": kpi, "target": e["kpi"], "strength": e.get("strength", 0)}
+        for kpi, data in CAUSAL_GRAPH.items()
+        for e in data.get("causes", [])
+    ]
+    return {"nodes": nodes, "edges": edges}
+
+
 @router.get("/causal/{kpi_name}")
 def get_causal_context(kpi_name: str):
     """Return causal chain for a given KPI from the encoded causal graph."""

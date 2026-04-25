@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, FlaskConical, TrendingDown, Zap, ChevronRight } from 'lucide-react'
+import { X, FlaskConical, TrendingDown, Zap, ChevronRight, Target, Clock, FileText, Lightbulb } from 'lucide-react'
 
 // Pre-computed scenarios from context/13-demo-data-strategy.md
 const SCENARIOS = {
@@ -164,15 +164,15 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
                   <TrendingDown size={12} /> {active.delta > 0 ? '+' : ''}{active.delta}{data.unit} vs baseline
                 </div>
                 <div style={{ ...S.resultTag, background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)' }}>
-                  🎯 Confiance: {active.confidence}%
+                  <Target size={12} /> Confiance: {active.confidence}%
                 </div>
                 <div style={{ ...S.resultTag, background: '#fef9c3', color: '#a16207' }}>
-                  ⏱ Délai d'effet: {active.delay}
+                  <Clock size={12} /> Délai d'effet: {active.delay}
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              💡 {active.detail}
+            <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+              <Lightbulb size={14} style={{ flexShrink: 0, marginTop: '2px', color: '#f59e0b' }} /> {active.detail}
             </div>
 
             {/* Comparison bar */}
@@ -191,8 +191,8 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
         <div style={S.footer}>
           <button style={S.footerBtnSecondary} onClick={onClose}>Fermer</button>
           {active && (
-            <button style={S.footerBtnPrimary}>
-              📄 Générer rapport d'impact
+            <button style={{ ...S.footerBtnPrimary, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FileText size={14} /> Générer rapport d'impact
             </button>
           )}
         </div>
