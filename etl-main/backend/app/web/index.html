@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UCAR ETL Demo UI</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #f6f8fb; color: #1f2937; }
+    .card { background: white; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    h1 { margin-top: 0; }
+    label { display:block; margin: 8px 0 4px; font-weight: 600; }
+    input, select, button, textarea { width: 100%; padding: 10px; margin-bottom: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
+    button { cursor: pointer; background: #0b4f7c; color: white; font-weight: 600; }
+    pre { background: #111827; color: #e5e7eb; padding: 10px; border-radius: 8px; overflow:auto; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .muted { color: #6b7280; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>UCAR ETL Track 1 Demo</h1>
+  <div class="card">
+    <h3>Authentication Header</h3>
+    <input id="token" value="admin1:admin:UCAR" />
+    <div class="muted">Format: username:role:institution (sent as Bearer token)</div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>Async Upload</h3>
+      <label>Institution</label>
+      <input id="institution" value="ISITCOM" />
+      <label>Document Type</label>
+      <select id="documentType">
+        <option value="grades">grades</option>
+        <option value="budget">budget</option>
+      </select>
+      <button onclick="loadTemplates()">Load Templates</button>
+      <pre id="templateOut">No template loaded.</pre>
+      <label>File</label>
+      <input id="fileInput" type="file" />
+      <button onclick="uploadAsync()">Queue Upload</button>
+      <pre id="uploadOut">No upload yet.</pre>
+    </div>
+
+    <div class="card">
+      <h3>Job Tracking</h3>
+      <label>File ID</label>
+      <input id="fileId" placeholder="paste file_id here" />
+      <button onclick="getJob()">Get Job</button>
+      <button onclick="listJobs()">List Jobs</button>
+      <button onclick="opsSummary()">Ops Summary</button>
+      <pre id="jobOut">No jobs requested yet.</pre>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Human Review (Apply Corrections)</h3>
+    <label>Corrections JSON</label>
+    <textarea id="corrections" rows="5">[
+  { "row_index": 0, "field": "grade", "value": 18 }
+]</textarea>
+    <button onclick="applyCorrections()">Apply Corrections + Revalidate</button>
+    <pre id="correctionOut">No correction applied yet.</pre>
+  </div>
+
+  <script>
+    function authHeaders() {
+      const token = document.getElementById('token').value.trim();
+      return { 'Authorization': 'Bearer ' + token };
+    }
+
+    async function uploadAsync() {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) {
+        alert('Please select a file first.');
+        return;
+      }
+
+      const form = new FormData();
+      form.append('institution', document.getElementById('institution').value);
+      form.append('document_type', document.getElementById('documentType').value);
+      form.append('auto_store', 'true');
+      form.append('file', file);
+
+      const resp = await fetch('/api/upload-async', { method: 'POST', body: form, headers: authHeaders() });
+      const data = await resp.json();
+      document.getElementById('uploadOut').textContent = JSON.stringify(data, null, 2);
+      if (data.file_id) document.getElementById('fileId').value = data.file_id;
+    }
+
+    async function getJob() {
+      const id = document.getElementById('fileId').value.trim();
+      if (!id) return;
+      const resp = await fetch('/api/jobs/' + id, { headers: authHeaders() });
+      const data = await resp.json();
+      document.getElementById('jobOut').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function listJobs() {
+      const resp = await fetch('/api/jobs?limit=20', { headers: authHeaders() });
+      const data = await resp.json();
+      document.getElementById('jobOut').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function loadTemplates() {
+      const resp = await fetch('/api/templates', { headers: authHeaders() });
+      const data = await resp.json();
+      document.getElementById('templateOut').textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function applyCorrections() {
+      const id = document.getElementById('fileId').value.trim();
+      if (!id) return;
+      const corrections = JSON.parse(document.getElementById('corrections').value);
+      const resp = await fetch('/api/review/apply-corrections', {
+        method: 'POST',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_id: id, corrections, auto_store: true })
+      });
+      const data = await resp.json();
+      document.getElementById('correctionOut').textContent = JSON.stringify(data, null, 2);
+      await getJob();
+    }
+
+    async function opsSummary() {
+      const resp = await fetch('/api/ops/summary', { headers: authHeaders() });
+      const data = await resp.json();
+      document.getElementById('jobOut').textContent = JSON.stringify(data, null, 2);
+    }
+  </script>
+</body>
+</html>

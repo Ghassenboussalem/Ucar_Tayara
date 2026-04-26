@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from routes.api import router
+from routes.ingest import router as ingest_router
 
 app = FastAPI(
     title="UCAR Intelligence Platform",
@@ -17,6 +18,7 @@ app.add_middleware(
 )
 
 app.include_router(router, prefix="/api")
+app.include_router(ingest_router, prefix="/api", tags=["ETL Import"])
 
 
 @app.get("/")

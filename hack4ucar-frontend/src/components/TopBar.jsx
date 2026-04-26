@@ -1,25 +1,18 @@
 import { useState, useEffect, useRef } from 'react'
 import { Search, Sparkles, Building2, ChevronDown, X } from 'lucide-react'
 import { getInstitutions } from '../api/client'
-
-// Global institution filter — stored in sessionStorage so it persists across page navigation
-export function getSelectedInstitution() {
-  try { return JSON.parse(sessionStorage.getItem('ucar_inst_filter') || 'null') } catch { return null }
-}
-export function setSelectedInstitution(inst) {
-  if (inst) sessionStorage.setItem('ucar_inst_filter', JSON.stringify(inst))
-  else sessionStorage.removeItem('ucar_inst_filter')
-  window.dispatchEvent(new Event('ucar_inst_change'))
-}
+import { getSelectedInstitution, setSelectedInstitution } from '../utils/institutionFilter'
+import { useLang } from '../contexts/LangContext'
 
 export default function TopBar({ onOpenChat }) {
+  const { lang, toggleLang, t, isRTL, dateLocale } = useLang()
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('ucar_user') || '{}') } catch { return {} }
   })()
   const isPresidency = user.role === 'presidency'
 
   const hour = new Date().getHours()
-  const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'
+  const greeting = hour < 12 ? t('topbar.morning') : hour < 18 ? t('topbar.afternoon') : t('topbar.evening')
   const firstName = user.full_name ? user.full_name.split(' ')[0] : ''
 
   const [institutions, setInstitutions] = useState([])
@@ -49,20 +42,54 @@ export default function TopBar({ onOpenChat }) {
     setSearch('')
   }
 
+  function institutionName(inst) {
+    if (!inst) return ''
+    if (lang === 'ar') return inst.name_ar || inst.name_fr || ''
+    return inst.name_fr || inst.name_ar || ''
+  }
+
   const filtered = institutions.filter((i) =>
-    !search || i.name_fr.toLowerCase().includes(search.toLowerCase()) || i.code.toLowerCase().includes(search.toLowerCase())
+    !search || institutionName(i).toLowerCase().includes(search.toLowerCase()) || i.code.toLowerCase().includes(search.toLowerCase())
   )
 
+  const barStyle = {
+    ...styles.bar,
+    flexDirection: isRTL ? 'row-reverse' : 'row',
+  }
+
+  const rightStyle = {
+    ...styles.right,
+    flexDirection: isRTL ? 'row-reverse' : 'row',
+  }
+
+  const dropdownStyle = {
+    ...styles.dropdown,
+    right: isRTL ? 'auto' : 0,
+    left: isRTL ? 0 : 'auto',
+  }
+
+  const searchIconStyle = {
+    ...styles.searchIcon,
+    left: isRTL ? 'auto' : '10px',
+    right: isRTL ? '10px' : 'auto',
+  }
+
+  const searchInputStyle = {
+    ...styles.searchInput,
+    padding: isRTL ? '7px 32px 7px 14px' : '7px 14px 7px 32px',
+    textAlign: isRTL ? 'right' : 'left',
+  }
+
   return (
-    <header style={styles.bar}>
+    <header style={barStyle}>
       <div style={styles.left}>
         <h2 style={styles.greeting}>{greeting}{firstName ? `, ${firstName}` : ''} 👋</h2>
-        <p style={styles.sub}>
-          {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <p style={{ ...styles.sub, textTransform: lang === 'fr' ? 'capitalize' : 'none' }}>
+          {new Date().toLocaleDateString(dateLocale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </p>
       </div>
 
-      <div style={styles.right}>
+      <div style={rightStyle}>
         {/* Institution Switcher — only for presidency role */}
         {isPresidency && (
           <div ref={dropRef} style={{ position: 'relative' }}>
@@ -73,37 +100,37 @@ export default function TopBar({ onOpenChat }) {
             >
               <Building2 size={14} />
               <span style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {selected ? selected.code + ' — ' + selected.name_fr.split(' ').slice(0, 3).join(' ') : 'Tous les établissements'}
+                {selected ? selected.code + ' — ' + institutionName(selected).split(' ').slice(0, 3).join(' ') : t('topbar.all_inst')}
               </span>
               <ChevronDown size={13} style={{ transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />
               {selected && (
-                <span onClick={(e) => { e.stopPropagation(); handleSelect(null) }} style={{ marginLeft: '2px', opacity: 0.6, display: 'flex' }}>
+                <span onClick={(e) => { e.stopPropagation(); handleSelect(null) }} style={{ marginInlineStart: '2px', opacity: 0.6, display: 'flex' }}>
                   <X size={12} />
                 </span>
               )}
             </button>
 
             {open && (
-              <div style={styles.dropdown}>
+              <div style={dropdownStyle}>
                 <div style={{ padding: '8px 10px', borderBottom: '1px solid #f1f5f9' }}>
                   <input
                     autoFocus
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Rechercher…"
+                    placeholder={t('topbar.search_inst')}
                     style={styles.dropSearch}
                   />
                 </div>
                 <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
                   <button style={styles.dropItem} onClick={() => handleSelect(null)}>
                     <Building2 size={13} style={{ opacity: 0.5 }} />
-                    <span style={{ fontWeight: 600 }}>Tous les établissements</span>
+                    <span style={{ fontWeight: 600 }}>{t('topbar.all_inst')}</span>
                     {!selected && <span style={styles.activeDot} />}
                   </button>
                   {filtered.map((inst) => (
                     <button key={inst.id} style={styles.dropItem} onClick={() => handleSelect(inst)}>
                       <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'rgb(29,83,148)', minWidth: '44px' }}>{inst.code}</span>
-                      <span style={{ flex: 1, textAlign: 'left', fontSize: '0.8rem', color: '#0f172a' }}>{inst.name_fr}</span>
+                      <span style={{ flex: 1, textAlign: isRTL ? 'right' : 'left', fontSize: '0.8rem', color: '#0f172a' }}>{institutionName(inst)}</span>
                       {selected?.id === inst.id && <span style={styles.activeDot} />}
                     </button>
                   ))}
@@ -113,14 +140,18 @@ export default function TopBar({ onOpenChat }) {
           </div>
         )}
 
+        <button style={styles.langBtn} onClick={toggleLang} title={t('topbar.lang_switch_title')}>
+          {t('lang.toggle')}
+        </button>
+
         <div style={styles.searchWrap}>
-          <Search size={15} style={styles.searchIcon} />
-          <input style={styles.searchInput} placeholder="Rechercher une institution, un KPI…" />
+          <Search size={15} style={searchIconStyle} />
+          <input style={searchInputStyle} placeholder={t('topbar.search')} />
         </div>
 
         <button id="btn-open-chat" style={styles.aiBtn} onClick={onOpenChat}>
           <Sparkles size={15} />
-          <span>Demander à l'IA</span>
+          <span>{t('topbar.ai_btn')}</span>
         </button>
       </div>
     </header>
@@ -138,6 +169,18 @@ const styles = {
   greeting: { fontSize: '1.05rem', fontWeight: 700, color: '#0f172a', letterSpacing: '-0.02em' },
   sub: { fontSize: '0.75rem', color: '#94a3b8', fontWeight: 400, textTransform: 'capitalize' },
   right: { display: 'flex', alignItems: 'center', gap: '12px' },
+  langBtn: {
+    padding: '7px 11px',
+    borderRadius: '8px',
+    border: '1.5px solid #e2e8f0',
+    background: 'white',
+    color: '#374151',
+    fontSize: '0.76rem',
+    fontWeight: 700,
+    cursor: 'pointer',
+    fontFamily: 'Inter, sans-serif',
+    minWidth: '54px',
+  },
   instBtn: {
     display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px',
     borderRadius: '8px', border: '1.5px solid #e2e8f0', background: 'white',
@@ -149,7 +192,7 @@ const styles = {
     background: 'rgba(29,83,148,0.04)',
   },
   dropdown: {
-    position: 'absolute', top: 'calc(100% + 6px)', right: 0, width: '300px',
+    position: 'absolute', top: 'calc(100% + 6px)', width: '300px',
     background: 'white', borderRadius: '10px', border: '1px solid #e2e8f0',
     boxShadow: '0 8px 24px rgba(0,0,0,0.12)', zIndex: 100,
   },

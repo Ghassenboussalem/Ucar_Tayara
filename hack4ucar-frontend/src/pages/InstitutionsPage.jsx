@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getInstitutions } from '../api/client'
-import { Building2, ChevronRight, Search, Map } from 'lucide-react'
+import { Building2, ChevronRight, Search } from 'lucide-react'
+import { useLang } from '../contexts/LangContext'
 
 function HealthDot({ score }) {
   const color = score >= 75 ? '#22c55e' : score >= 55 ? '#f59e0b' : '#ef4444'
@@ -9,6 +10,8 @@ function HealthDot({ score }) {
 }
 
 export default function InstitutionsPage() {
+  const { lang } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
   const [institutions, setInstitutions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -29,9 +32,11 @@ export default function InstitutionsPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Building2 size={22} color="rgb(29,83,148)" /> Institutions
+            <Building2 size={22} color="rgb(29,83,148)" /> {tx('Institutions', 'المؤسسات')}
           </h1>
-          <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '4px' }}>Réseau UCAR — {institutions.length} établissements</p>
+          <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '4px' }}>
+            {tx('Réseau UCAR', 'شبكة UCAR')} - {institutions.length} {tx('établissements', 'مؤسسة')}
+          </p>
         </div>
         <button
           onClick={() => navigate('/map')}
@@ -47,14 +52,14 @@ export default function InstitutionsPage() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher par nom, code ou gouvernorat…"
+          placeholder={tx('Rechercher par nom, code ou gouvernorat…', 'ابحث بالاسم أو الرمز أو الولاية...')}
           style={{ padding: '9px 12px 9px 36px', borderRadius: '8px', border: '1.5px solid #e2e8f0', fontSize: '0.82rem', fontFamily: 'Inter,sans-serif', width: '100%', outline: 'none', background: 'white' }}
         />
       </div>
 
       {/* Grid */}
       {loading ? (
-        <p style={{ textAlign: 'center', color: '#94a3b8', padding: '60px' }}>Chargement…</p>
+        <p style={{ textAlign: 'center', color: '#94a3b8', padding: '60px' }}>{tx('Chargement...', 'جاري التحميل...')}</p>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '16px' }}>
           {filtered.map((inst) => (
@@ -87,7 +92,7 @@ export default function InstitutionsPage() {
 
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '8px', borderTop: '1px solid #f1f5f9' }}>
                 <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 600 }}>
-                  👥 {(inst.student_capacity || 0).toLocaleString('fr-FR')} étudiants
+                  👥 {(inst.student_capacity || 0).toLocaleString('fr-FR')} {tx('étudiants', 'طالب')}
                 </span>
                 {inst.director_name && (
                   <span style={{ fontSize: '0.7rem', color: '#94a3b8', maxWidth: '130px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

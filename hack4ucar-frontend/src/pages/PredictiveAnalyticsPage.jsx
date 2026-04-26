@@ -5,11 +5,13 @@ import ForecastChart from '../components/ForecastChart'
 import RiskMatrix from '../components/RiskMatrix'
 import WhatIfPanel from '../components/WhatIfPanel'
 import { getInstitutions, getForecastAcademic, getForecastFinance, getRiskMatrix } from '../api/client'
+import { useLang } from '../contexts/LangContext'
 
 const FORECAST_CONFIGS = [
   {
     id: 'dropout',
     label: "Taux d'abandon",
+    labelAr: 'معدل الانقطاع',
     domain: 'academic',
     kpi: 'dropout_rate',
     color: '#dc2626',
@@ -17,20 +19,24 @@ const FORECAST_CONFIGS = [
     badWhenUp: true,
     whatIf: 'dropout',
     description: "Prédit la progression du taux d'abandon sur les 2 prochains semestres.",
+    descriptionAr: 'يتنبأ بتطور معدل الانقطاع خلال السداسيين القادمين.',
   },
   {
     id: 'success',
     label: 'Taux de réussite',
+    labelAr: 'معدل النجاح',
     domain: 'academic',
     kpi: 'success_rate',
     color: 'rgb(29,83,148)',
     unit: '%',
     badWhenUp: false,
     description: "Prévision du taux de réussite moyen du réseau UCAR.",
+    descriptionAr: 'توقع معدل النجاح المتوسط لشبكة UCAR.',
   },
   {
     id: 'budget',
     label: 'Exécution budgétaire',
+    labelAr: 'تنفيذ الميزانية',
     domain: 'finance',
     kpi: 'budget_execution_rate',
     color: '#7c3aed',
@@ -38,15 +44,18 @@ const FORECAST_CONFIGS = [
     badWhenUp: true,
     whatIf: 'budget',
     description: "Détecte un risque de dépassement budgétaire avant la clôture de l'exercice.",
+    descriptionAr: 'يكشف خطر تجاوز الميزانية قبل غلق السنة المالية.',
   },
 ]
 
 const SCENARIO_TABS = [
-  { id: 'dropout', label: "Taux d'abandon — EPT", kpiLabel: '9.2% actuel → 10.4% prévu' },
-  { id: 'budget', label: 'Exécution budget — IHEC', kpiLabel: '88% actuel → 107% prévu' },
+  { id: 'dropout', label: "Taux d'abandon — EPT", labelAr: 'معدل الانقطاع - EPT', kpiLabel: '9.2% actuel → 10.4% prévu', kpiLabelAr: '9.2% حاليا → 10.4% متوقع' },
+  { id: 'budget', label: 'Exécution budget — IHEC', labelAr: 'تنفيذ الميزانية - IHEC', kpiLabel: '88% actuel → 107% prévu', kpiLabelAr: '88% حاليا → 107% متوقع' },
 ]
 
 export default function PredictiveAnalyticsPage() {
+  const { lang } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
   const [institutions, setInstitutions] = useState([])
   const [selectedInstId, setSelectedInstId] = useState(null)
@@ -94,16 +103,16 @@ export default function PredictiveAnalyticsPage() {
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Brain size={22} color="rgb(29,83,148)" /> Analytique prédictive
+            <Brain size={22} color="rgb(29,83,148)" /> {tx('Analytique prédictive', 'تحليلات تنبؤية')}
           </h1>
           <p style={{ color: '#94a3b8', fontSize: '0.82rem', marginTop: '4px' }}>
-            Prévisions Prophet · Matrice de risque · Simulation d'interventions
+            {tx('Prévisions Prophet · Matrice de risque · Simulation d\'interventions', 'توقعات Prophet - مصفوفة المخاطر - محاكاة التدخلات')}
           </p>
         </div>
 
         {/* Institution selector */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Institution :</label>
+          <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>{tx('Institution', 'المؤسسة')} :</label>
           <select
             value={selectedInstId || ''}
             onChange={(e) => setSelectedInstId(Number(e.target.value))}
@@ -119,9 +128,9 @@ export default function PredictiveAnalyticsPage() {
       {/* Tab navigation */}
       <div style={{ display: 'flex', gap: '4px', background: '#f8fafc', borderRadius: '10px', padding: '4px', width: 'fit-content' }}>
         {[
-          { id: 'forecasts', label: 'Prévisions', icon: TrendingUp },
-          { id: 'risk', label: 'Matrice de risque', icon: Activity },
-          { id: 'whatif', label: 'Simulation', icon: FlaskConical },
+          { id: 'forecasts', label: tx('Prévisions', 'توقعات'), icon: TrendingUp },
+          { id: 'risk', label: tx('Matrice de risque', 'مصفوفة المخاطر'), icon: Activity },
+          { id: 'whatif', label: tx('Simulation', 'محاكاة'), icon: FlaskConical },
         ].map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)} style={{
             display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 16px',
@@ -149,20 +158,20 @@ export default function PredictiveAnalyticsPage() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                       <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: cfg.color }} />
-                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{cfg.label}</h3>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a' }}>{lang === 'ar' ? cfg.labelAr : cfg.label}</h3>
                       <span style={{ padding: '2px 8px', borderRadius: '6px', background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)', fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase' }}>Prophet · 80% IC</span>
                     </div>
-                    <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{cfg.description} · {selectedInst?.name_fr}</p>
+                    <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{lang === 'ar' ? cfg.descriptionAr : cfg.description} · {selectedInst?.name_fr}</p>
                   </div>
                   {cfg.whatIf && (
                     <button onClick={() => setWhatIfScenario(cfg.whatIf)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', borderRadius: '8px', border: '1px solid rgba(29,83,148,0.2)', background: 'rgba(29,83,148,0.05)', color: 'rgb(29,83,148)', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'Inter,sans-serif' }}>
-                      <FlaskConical size={13} /> Simuler une intervention
+                      <FlaskConical size={13} /> {tx('Simuler une intervention', 'محاكاة تدخل')}
                     </button>
                   )}
                 </div>
                 {isLoading ? (
                   <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
-                    <span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block', marginRight: '8px' }}>⟳</span> Calcul Prophet en cours…
+                    <span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block', marginRight: '8px' }}>⟳</span> {tx('Calcul Prophet en cours...', 'جاري حساب Prophet...')}
                   </div>
                 ) : fc ? (
                   <ForecastChart
@@ -175,11 +184,12 @@ export default function PredictiveAnalyticsPage() {
                     confidence={fc.confidence}
                     lastActual={fc.last_actual}
                     lastForecast={fc.last_forecast}
+                    lang={lang}
                   />
                 ) : (
                   <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.82rem', flexDirection: 'column', gap: '8px' }}>
                     <BarChart3 size={32} style={{ opacity: 0.3 }} />
-                    Prévision non disponible — données insuffisantes ou erreur backend
+                    {tx('Prévision non disponible — données insuffisantes ou erreur backend', 'التوقع غير متاح - البيانات غير كافية أو يوجد خطأ في الخادم')}
                   </div>
                 )}
               </div>
@@ -193,15 +203,16 @@ export default function PredictiveAnalyticsPage() {
         <div style={{ background: 'white', borderRadius: '14px', padding: '24px', border: '1px solid #e2e8f0' }}>
           <div style={{ marginBottom: '20px' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Activity size={18} color="rgb(29,83,148)" /> Matrice de risque — Réseau UCAR
+              <Activity size={18} color="rgb(29,83,148)" /> {tx('Matrice de risque — Réseau UCAR', 'مصفوفة المخاطر - شبكة UCAR')}
             </h3>
             <p style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-              Probabilité de dégradation (basée sur la pente du taux d'abandon) × Impact (effectif étudiant). Calculé sur toutes les institutions actives.
+              {tx("Probabilité de dégradation (basée sur la pente du taux d'abandon) × Impact (effectif étudiant). Calculé sur toutes les institutions actives.", 'احتمال التدهور (بناء على ميل معدل الانقطاع) × الأثر (عدد الطلبة). محسوب على جميع المؤسسات النشطة.')}
             </p>
           </div>
           <RiskMatrix
             data={riskData}
             onSelect={(d) => navigate(`/institutions/${d.id}`)}
+            lang={lang}
           />
         </div>
       )}
@@ -217,8 +228,8 @@ export default function PredictiveAnalyticsPage() {
                 background: scenarioTab === t.id ? 'rgba(29,83,148,0.04)' : 'white',
                 cursor: 'pointer', fontFamily: 'Inter,sans-serif', transition: 'all 150ms',
               }}>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: scenarioTab === t.id ? 'rgb(29,83,148)' : '#374151' }}>{t.label}</div>
-                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{t.kpiLabel}</div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: scenarioTab === t.id ? 'rgb(29,83,148)' : '#374151' }}>{lang === 'ar' ? t.labelAr : t.label}</div>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '2px' }}>{lang === 'ar' ? t.kpiLabelAr : t.kpiLabel}</div>
               </button>
             ))}
           </div>

@@ -1,0 +1,13 @@
+asset_id,asset_name,category,location,capacity,current_usage,maintenance_status,last_maintenance_date,next_maintenance_date,age_years,condition_score,annual_maintenance_cost_tnd,notes,period
+INF001,Amphithéâtre principal,amphi,Bâtiment A,400,420,critique,2024-01-15,2025-01-15,22,3,8500,Suroccupation systématique,S1-2025
+INF002,Laboratoire Chimie 1,labo,Bâtiment B,30,28,urgent,2024-06-01,2024-12-01,18,4,4200,Hottes défectueuses,S1-2025
+INF003,Laboratoire Chimie 2,labo,Bâtiment B,30,31,critique,2023-11-10,2024-11-10,20,3,4500,Suroccupation sécurité,S1-2025
+INF004,Salle informatique 1,salle_info,Bâtiment C,40,38,bon,2025-01-20,2025-07-20,8,8,2100,RAS,S1-2025
+INF005,Salle informatique 2,salle_info,Bâtiment C,40,42,moyen,2024-09-15,2025-03-15,12,6,2300,Climatisation insuffisante,S1-2025
+INF006,Bibliothèque centrale,bibliotheque,Bâtiment D,150,185,urgent,2024-03-01,2024-09-01,25,4,6200,Suroccupation débordement,S1-2025
+INF007,Réseau informatique,reseau,Campus entier,500,490,moyen,2025-02-10,2025-08-10,6,7,15000,Bande passante limite,S1-2025
+INF008,Groupe électrogène,energie,Local technique,1,1,critique,2022-05-01,2023-05-01,30,2,3800,Non maintenu depuis 2 ans,S1-2025
+INF009,Parking principal,parking,Entrée campus,200,320,mauvais,2023-01-01,2024-01-01,15,3,1200,Suroccupation grave,S1-2025
+INF010,Cantine universitaire,restauration,Bâtiment E,300,280,moyen,2024-11-01,2025-05-01,10,6,5500,RAS,S1-2025
+INF011,Terrain de sport,sport,Zone Nord,200,90,bon,2025-01-05,2025-07-05,5,9,800,RAS,S1-2025
+INF012,Salles de cours B1-B8,salle_cours,Bâtiment B,35,37,moyen,2024-08-20,2025-02-20,18,5,900,Légère suroccupation,S1-2025

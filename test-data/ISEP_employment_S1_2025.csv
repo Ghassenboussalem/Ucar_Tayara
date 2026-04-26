@@ -1,0 +1,10 @@
+promotion_year,degree_level,speciality,graduates_count,employed_6months,employed_12months,pursuing_studies,unemployed_12months,avg_salary_tnd,employed_in_field_pct,period
+2023,Licence,Electronique,45,18,22,8,15,1150,38,S1-2025
+2023,Licence,Électrotechnique,38,12,16,6,16,1100,32,S1-2025
+2023,Mastère,Systèmes Embarqués,22,15,19,2,1,2200,72,S1-2025
+2023,Mastère,Télécommunications,18,11,15,2,1,2100,68,S1-2025
+2022,Licence,Electronique,50,19,24,10,16,1180,40,S1-2025
+2022,Licence,Automatique,42,14,18,7,17,1080,35,S1-2025
+2022,Mastère,Génie Électrique,25,17,22,2,1,2350,76,S1-2025
+2024,Licence,Informatique Industrielle,55,8,0,12,0,0,0,S1-2025
+2024,Mastère,Intelligence Artificielle,20,12,0,5,0,0,0,S1-2025
