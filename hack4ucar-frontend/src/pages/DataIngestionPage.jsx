@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Upload, Database, CheckCircle2, AlertTriangle, Cpu, FileText,
   Play, Wifi, WifiOff, RefreshCw, ChevronRight, X, Folder,
-  FolderOpen, Sparkles, Building2, Zap, Clock, Eye, Image
+  FolderOpen, Sparkles, Building2, Zap, Clock, Eye, Image,
+  Mail, Inbox, MailCheck, MailX, Settings2, Radio,
 } from 'lucide-react'
 import {
   etlUploadFile, etlUploadBatch, etlGetJob,
-  etlListJobs, etlGetScenarios, etlDemoTrigger, getRecentAlerts
+  etlListJobs, etlGetScenarios, etlDemoTrigger, getRecentAlerts,
+  etlEmailStatus, etlEmailEvents, etlEmailSimulate,
 } from '../api/client'
 import { useLang } from '../contexts/LangContext'
 
@@ -303,6 +305,9 @@ export default function DataIngestionPage() {
         <TabBtn active={tab === 'demo'} onClick={() => setTab('demo')} icon={<Zap size={15} />}>
           {tx('Mode Démo Hackathon', 'وضع عرض الهاكاثون')}
         </TabBtn>
+        <TabBtn active={tab === 'email'} onClick={() => setTab('email')} icon={<Mail size={15} />}>
+          {tx('Ingestion Email', 'استيراد البريد')}
+        </TabBtn>
       </div>
 
       {/* ── Main content ───────────────────────────────────────── */}
@@ -331,7 +336,7 @@ export default function DataIngestionPage() {
           batchDone={batchDone}
           lang={lang}
         />
-      ) : (
+      ) : tab === 'demo' ? (
         <DemoTab
           scenarios={demoScenarios}
           demoRunning={demoRunning}
@@ -343,6 +348,8 @@ export default function DataIngestionPage() {
           onRun={runDemo}
           lang={lang}
         />
+      ) : (
+        <EmailTab lang={lang} />
       )}
     </div>
   )
@@ -905,6 +912,341 @@ function FlowArrow({ active }) {
       <ChevronRight size={16} color={active ? 'rgb(29,83,148)' : '#e2e8f0'}
         style={{ position: 'absolute', right: '-8px', transition: 'color 0.4s ease' }} />
     </div>
+  )
+}
+
+// ── Email Ingestion Tab ───────────────────────────────────────────────────────
+function EmailTab({ lang }) {
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
+
+  const [status, setStatus]       = useState(null)   // email_service stats
+  const [events, setEvents]       = useState([])      // SSE event feed
+  const [connected, setConnected] = useState(false)
+  const esRef = useRef(null)
+
+  // Refresh status every 15 s
+  useEffect(() => {
+    const refresh = () => etlEmailStatus().then(setStatus).catch(() => {})
+    refresh()
+    const t = setInterval(refresh, 15000)
+    return () => clearInterval(t)
+  }, [])
+
+  // SSE connection
+  useEffect(() => {
+    const es = etlEmailEvents()
+    esRef.current = es
+
+    es.onopen = () => setConnected(true)
+    es.onerror = () => setConnected(false)
+
+    es.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data)
+        if (data.type === 'connected') {
+          setStatus(prev => ({ ...prev, ...data }))
+          return
+        }
+        setEvents(prev => [{ ...data, _id: Date.now() }, ...prev].slice(0, 40))
+      } catch { /* ignore parse errors */ }
+    }
+
+    return () => { es.close(); setConnected(false) }
+  }, [])
+
+  const isEnabled = status?.enabled === true
+
+  // Simulate a demo event (injects a fake email_received event for demos)
+  async function simulateDemo() {
+    await etlEmailSimulate({
+      type: 'email_received',
+      from: 'directeur@ept.utm.tn',
+      subject: 'EPT finance S1_2025 — rapport mensuel',
+      institution: 'EPT',
+      domain: 'finance',
+      period: 'S1_2025',
+      attachments: 1,
+    })
+    await etlEmailSimulate({
+      type: 'processing_start',
+      filename: 'budget_EPT_S1_2025.pdf',
+      institution: 'EPT',
+      domain: 'finance',
+      period: 'S1_2025',
+    })
+    setTimeout(() => etlEmailSimulate({
+      type: 'job_done',
+      filename: 'budget_EPT_S1_2025.pdf',
+      job_id: 'demo-' + Date.now(),
+      institution: 'EPT',
+      domain: 'finance',
+      status: 'stored',
+      records: 12,
+      quality: 94,
+    }), 2000)
+  }
+
+  const EVENT_ICON = {
+    email_received:   <Mail size={14} color="#2563eb" />,
+    processing_start: <Cpu size={14} color="#d97706" />,
+    job_done:         <MailCheck size={14} color="#16a34a" />,
+    job_error:        <MailX size={14} color="#dc2626" />,
+    connected:        <Radio size={14} color="#16a34a" />,
+  }
+
+  const EVENT_COLOR = {
+    email_received:   '#eff6ff',
+    processing_start: '#fffbeb',
+    job_done:         '#f0fdf4',
+    job_error:        '#fef2f2',
+    connected:        '#f0fdf4',
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', alignItems: 'start' }}>
+
+      {/* Left — Config & Status */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+        {/* Status card */}
+        <div style={{ ...styles.card, border: `1.5px solid ${isEnabled ? '#bbf7d0' : '#e2e8f0'}` }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+            <div style={styles.cardTitle}>
+              <Inbox size={16} color="rgb(29,83,148)" />
+              {tx('Ingestion par Email', 'الاستيراد عبر البريد')}
+            </div>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: '5px',
+              padding: '3px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700,
+              background: isEnabled ? '#dcfce7' : '#f1f5f9',
+              color: isEnabled ? '#15803d' : '#64748b',
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%',
+                             background: isEnabled ? '#22c55e' : '#94a3b8',
+                             animation: isEnabled ? 'ingestBlink 1.5s ease-in-out infinite' : 'none' }} />
+              {isEnabled ? tx('Actif', 'نشط') : tx('Inactif', 'غير نشط')}
+            </span>
+          </div>
+
+          {isEnabled ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <Row label={tx('Boîte surveillée', 'البريد المراقب')} value={status?.inbox || '—'} />
+              <Row label={tx('Serveur IMAP', 'خادم IMAP')}         value={status?.imap_host || '—'} />
+              <Row label={tx('Intervalle', 'الفترة الزمنية')}      value={`${status?.poll_seconds ?? 30}s`} />
+              <Row label={tx('Dernière vérif.', 'آخر تحقق')}
+                   value={status?.last_checked ? new Date(status.last_checked).toLocaleTimeString('fr-FR') : '—'} />
+              <Row label={tx('Emails traités', 'رسائل تمت معالجتها')}  value={status?.emails_processed ?? 0} />
+              <Row label={tx('Pièces jointes', 'المرفقات المعالجة')} value={status?.attachments_processed ?? 0} />
+              {status?.error && (
+                <div style={{ padding: '8px 10px', borderRadius: '8px', background: '#fef2f2',
+                              color: '#dc2626', fontSize: '0.72rem', display: 'flex', gap: '6px' }}>
+                  <AlertTriangle size={13} style={{ flexShrink: 0, marginTop: '1px' }} />
+                  {status.error}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ color: '#64748b', fontSize: '0.8rem', lineHeight: 1.6 }}>
+              {tx(
+                'Activez l\'ingestion email en ajoutant ces variables dans votre fichier .env du ETL backend :',
+                'فعّل استيراد البريد بإضافة هذه المتغيرات في ملف .env الخاص بـ ETL backend :'
+              )}
+              <pre style={{ marginTop: '10px', padding: '10px 12px', borderRadius: '8px',
+                            background: '#f8fafc', border: '1px solid #e2e8f0',
+                            fontSize: '0.72rem', color: '#334155', overflowX: 'auto', lineHeight: 1.7 }}>
+{`EMAIL_ENABLED=true
+EMAIL_IMAP_HOST=imap.gmail.com
+EMAIL_IMAP_PORT=993
+EMAIL_ADDRESS=votre@email.com
+EMAIL_PASSWORD=mot_de_passe_app
+EMAIL_POLL_SECONDS=30
+EMAIL_INSTITUTION_DEFAULT=EPT
+EMAIL_DOMAIN_DEFAULT=academic
+EMAIL_PERIOD_DEFAULT=S1_2025`}
+              </pre>
+              <div style={{ marginTop: '8px', fontSize: '0.71rem', color: '#94a3b8' }}>
+                {tx(
+                  'Pour Gmail, utilisez un "Mot de passe d\'application" (pas votre mot de passe habituel).',
+                  'لـ Gmail، استخدم "كلمة مرور التطبيق" وليس كلمتك السرية العادية.'
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Convention card */}
+        <div style={styles.card}>
+          <div style={{ ...styles.cardTitle, marginBottom: '12px' }}>
+            <Settings2 size={15} color="rgb(29,83,148)" />
+            {tx('Convention d\'objet email', 'تنسيق موضوع البريد')}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.7 }}>
+            {tx(
+              'Le système détecte automatiquement l\'institution, le domaine et la période à partir de l\'objet :',
+              'يكتشف النظام تلقائياً المؤسسة والمجال والفترة من موضوع الرسالة :'
+            )}
+          </div>
+          <pre style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '8px',
+                        background: '#f8fafc', border: '1px solid #e2e8f0',
+                        fontSize: '0.73rem', color: '#334155', lineHeight: 1.8 }}>
+{`EPT finance S1_2025
+INSAT academic 2024
+FSB hr S2_2024
+IHEC research 2024-2025`}
+          </pre>
+          <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {[
+              [tx('Institutions', 'المؤسسات'), 'EPT · INSAT · SUPCOM · IHEC · FSB · ESAC'],
+              [tx('Domaines', 'المجالات'), 'academic · finance · hr · esg · research · employment · infrastructure · partnership'],
+              [tx('Période', 'الفترة'), 'S1_2025 · S2_2024 · 2024 · 2024-2025'],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', gap: '8px', fontSize: '0.7rem' }}>
+                <span style={{ color: '#64748b', fontWeight: 600, minWidth: '70px' }}>{k}</span>
+                <span style={{ color: '#94a3b8' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Demo button */}
+        <button
+          onClick={simulateDemo}
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '7px',
+                   padding: '10px', borderRadius: '10px', border: '1.5px dashed #cbd5e1',
+                   background: 'white', color: '#475569', fontSize: '0.8rem', fontWeight: 600,
+                   cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.2s' }}
+        >
+          <Sparkles size={14} color="rgb(29,83,148)" />
+          {tx('Simuler une réception email (démo)', 'محاكاة استقبال بريد (عرض توضيحي)')}
+        </button>
+      </div>
+
+      {/* Right — Live event feed */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={styles.card}>
+          <div style={{ ...styles.cardTitle, marginBottom: '14px', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+              <Radio size={15} color={connected ? '#16a34a' : '#94a3b8'} />
+              {tx('Flux temps réel', 'التدفق الفوري')}
+            </div>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600,
+                           color: connected ? '#16a34a' : '#94a3b8' }}>
+              {connected ? tx('• Connecté', '• متصل') : tx('○ Déconnecté', '○ غير متصل')}
+            </span>
+          </div>
+
+          {events.length === 0 ? (
+            <div style={{ padding: '40px 20px', textAlign: 'center',
+                          color: '#94a3b8', fontSize: '0.8rem' }}>
+              <Mail size={32} color="#e2e8f0" style={{ marginBottom: '10px' }} />
+              <div style={{ fontWeight: 600 }}>
+                {tx('En attente d\'emails...', 'في انتظار رسائل البريد...')}
+              </div>
+              <div style={{ fontSize: '0.72rem', marginTop: '4px' }}>
+                {tx(
+                  'Les événements apparaîtront ici dès qu\'un email sera reçu',
+                  'ستظهر الأحداث هنا فور استلام بريد إلكتروني'
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '520px', overflowY: 'auto' }}>
+              {events.map((ev) => (
+                <EmailEvent key={ev._id} event={ev} icon={EVENT_ICON[ev.type]} bg={EVENT_COLOR[ev.type]} lang={lang} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Row({ label, value }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                  padding: '5px 0', borderBottom: '1px solid #f1f5f9', fontSize: '0.78rem' }}>
+      <span style={{ color: '#64748b' }}>{label}</span>
+      <span style={{ color: '#0f172a', fontWeight: 600, wordBreak: 'break-all', textAlign: 'right', maxWidth: '60%' }}>{value}</span>
+    </div>
+  )
+}
+
+function EmailEvent({ event, icon, bg, lang }) {
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
+  const TYPE_LABEL = {
+    email_received:   tx('Email reçu', 'بريد مستلم'),
+    processing_start: tx('Traitement', 'جارٍ المعالجة'),
+    job_done:         tx('Terminé', 'مكتمل'),
+    job_error:        tx('Erreur', 'خطأ'),
+    connected:        tx('Connecté', 'متصل'),
+  }
+  const time = event.ts ? new Date(event.ts).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : ''
+
+  return (
+    <div style={{ padding: '10px 12px', borderRadius: '10px', background: bg || '#f8fafc',
+                  border: '1px solid #e2e8f0', fontSize: '0.76rem', animation: 'ingestSlideIn 0.3s ease both' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: '#0f172a' }}>
+          {icon}
+          {TYPE_LABEL[event.type] || event.type}
+          {event.simulated && (
+            <span style={{ fontSize: '0.65rem', color: '#94a3b8', fontWeight: 400 }}>(démo)</span>
+          )}
+        </div>
+        <span style={{ color: '#94a3b8', fontSize: '0.68rem' }}>{time}</span>
+      </div>
+
+      {event.type === 'email_received' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', color: '#475569' }}>
+          <div><span style={{ color: '#64748b' }}>De :</span> {event.from}</div>
+          <div><span style={{ color: '#64748b' }}>Objet :</span> {event.subject}</div>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+            {event.institution && <Chip label={event.institution} color="#2563eb" />}
+            {event.domain && <Chip label={event.domain} color="#7c3aed" />}
+            {event.period && <Chip label={event.period} color="#0891b2" />}
+            {event.attachments && <Chip label={`${event.attachments} pièce(s)`} color="#64748b" />}
+          </div>
+        </div>
+      )}
+
+      {event.type === 'processing_start' && (
+        <div style={{ color: '#475569' }}>
+          <span style={{ color: '#64748b' }}>Fichier :</span> {event.filename}
+          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+            {event.institution && <Chip label={event.institution} color="#2563eb" />}
+            {event.domain && <Chip label={event.domain} color="#7c3aed" />}
+          </div>
+        </div>
+      )}
+
+      {event.type === 'job_done' && (
+        <div style={{ color: '#475569' }}>
+          <div><span style={{ color: '#64748b' }}>Fichier :</span> {event.filename}</div>
+          <div style={{ display: 'flex', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+            <Chip label={`${event.records ?? 0} enreg.`} color="#16a34a" />
+            {event.quality > 0 && <Chip label={`Qualité ${event.quality}%`} color="#0891b2" />}
+            <Chip label={event.status} color="#64748b" />
+          </div>
+        </div>
+      )}
+
+      {event.type === 'job_error' && (
+        <div style={{ color: '#dc2626', fontSize: '0.72rem' }}>
+          {event.filename && <div>{event.filename}</div>}
+          {event.error}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Chip({ label, color }) {
+  return (
+    <span style={{ padding: '1px 7px', borderRadius: '20px', fontSize: '0.65rem',
+                   fontWeight: 600, background: `${color}18`, color }}>
+      {label}
+    </span>
   )
 }
 

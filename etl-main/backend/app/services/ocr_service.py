@@ -3,10 +3,13 @@ from __future__ import annotations
 import base64
 import csv
 import io
+import logging
 import os
 import re
 import tempfile
 from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_float(value: str) -> float | None:
@@ -110,9 +113,14 @@ class PdfPlumberProvider(OCRProvider):
         text_chunks: list[str] = []
         with self.pdfplumber.open(io.BytesIO(content)) as pdf:
             for page in pdf.pages:
-                page_text = page.extract_text() or ""
+                # Primary: standard extraction (works for most Latin/Arabic embedded-text PDFs)
+                page_text = page.extract_text(x_tolerance=3, y_tolerance=3) or ""
+                if not page_text.strip():
+                    # Fallback: word-level extraction preserves RTL text better on some PDFs
+                    words = page.extract_words(x_tolerance=3, y_tolerance=3, keep_blank_chars=False)
+                    page_text = " ".join(w["text"] for w in words)
                 if page_text.strip():
-                    text_chunks.append(page_text)
+                    text_chunks.append(page_text.strip())
         return "\n".join(text_chunks).strip()
 
 
@@ -201,22 +209,29 @@ class GroqStructuringProvider(OCRProvider):
         kind = (document_type or "generic").lower()
         target = self._DOMAIN_HEADERS.get(kind, "field_1,field_2,field_3,field_4,field_5")
         return (
-            "You are a precise OCR structuring engine for a university data platform.\n"
-            "Your task: extract ALL table rows from the document and output ONLY valid CSV.\n"
+            "You are a precise OCR structuring engine for a multilingual university data platform.\n"
+            "The document may be written in Arabic, French, English, or a mix. Handle all equally.\n"
+            "Your task: extract ALL table rows and output ONLY valid CSV.\n"
             f"Use exactly these CSV column headers (first line): {target}\n"
             "Rules:\n"
             "- Output CSV only — no markdown, no code blocks, no explanation.\n"
             "- First line MUST be the header row listed above.\n"
-            "- Map extracted values to the nearest matching column.\n"
-            "- Numbers: remove spaces/currency symbols, keep digits and decimal point only.\n"
-            "- Keep French/Arabic/English text values as-is.\n"
-            "- Skip non-data lines (page numbers, titles, footers).\n"
-            "- If a column has no value for a row, leave it empty (two commas).\n"
+            "- Map extracted values to the nearest matching column, even if the document uses Arabic "
+            "column names (e.g. 'معدل الغياب' maps to absenteeism_rate, 'القسم' maps to department).\n"
+            "- Numbers: remove spaces/currency symbols/Arabic-Indic digits — output Western digits only.\n"
+            "- Text values: keep as-is in their original language.\n"
+            "- Skip non-data lines (page numbers, titles, footers, decorative lines).\n"
+            "- If a column has no value for a row, leave it empty (two consecutive commas).\n"
         )
 
     def _image_to_data_url(self, content: bytes, filename: str) -> str:
         ext = filename.lower().split(".")[-1]
-        mime = "image/jpeg" if ext in {"jpg", "jpeg"} else "image/png"
+        mime_map = {
+            "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp",
+            "bmp": "image/bmp", "tiff": "image/tiff", "tif": "image/tiff",
+        }
+        mime = mime_map.get(ext, "image/png")
         encoded = base64.b64encode(content).decode("utf-8")
         return f"data:{mime};base64,{encoded}"
 
@@ -237,11 +252,15 @@ class GroqStructuringProvider(OCRProvider):
             model=self.model,
             messages=[{"role": "user", "content": message_content}],
             temperature=0.0,
-            max_completion_tokens=1200,
+            max_completion_tokens=2000,
             top_p=1,
             stream=False,
         )
-        return (completion.choices[0].message.content or "").strip()
+        raw = (completion.choices[0].message.content or "").strip()
+        # Strip markdown code fences LLMs add despite instructions (```csv ... ```)
+        raw = re.sub(r"^```[a-zA-Z]*\n?", "", raw).strip()
+        raw = re.sub(r"\n?```$", "", raw).strip()
+        return raw
 
 
 class CompositeOCRProvider(OCRProvider):
@@ -271,7 +290,11 @@ class CompositeOCRProvider(OCRProvider):
             except Exception:
                 self.groq_provider = None
 
+    _IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif")
+
     def extract_text(self, content: bytes, filename: str, document_type: str | None = None) -> str:
+        is_image = filename.lower().endswith(self._IMAGE_EXTS)
+
         raw_text = ""
         for provider in self.providers:
             extracted = provider.extract_text(content, filename, document_type=document_type)
@@ -279,26 +302,43 @@ class CompositeOCRProvider(OCRProvider):
                 raw_text = extracted.strip()
                 break
 
-        # Optional VLM structuring pass for noisy OCR / multilingual / handwritten docs.
+        # VLM structuring pass: best-effort, always falls back gracefully.
         if self.groq_provider is not None:
-            try:
-                if filename.lower().endswith(
-                    (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif")
-                ):
+            if is_image:
+                # Preferred path: Groq reads the raw image directly (VLM).
+                try:
                     structured = self.groq_provider.extract_text(
                         content, filename, document_type=document_type
                     )
                     if structured.strip():
                         return structured
-                elif raw_text:
-                    # Ask Groq to normalize extracted text into CSV.
+                except Exception as exc:
+                    logger.warning("Groq VLM failed for image '%s': %s — trying text fallback", filename, exc)
+                # Secondary: if Tesseract/EasyOCR extracted something, let Groq structure it as text.
+                if raw_text:
+                    try:
+                        structured = self.groq_provider.extract_text(
+                            raw_text.encode("utf-8"), "normalized.txt", document_type=document_type
+                        )
+                        if structured.strip():
+                            return structured
+                    except Exception:
+                        pass
+            elif raw_text:
+                try:
                     structured = self.groq_provider.extract_text(
                         raw_text.encode("utf-8"), "normalized.txt", document_type=document_type
                     )
                     if structured.strip():
                         return structured
-            except Exception:
-                pass
+                except Exception:
+                    pass
+
+        if is_image and not raw_text:
+            raise ValueError(
+                "Impossible d'extraire le contenu de l'image. "
+                "Vérifiez que GROQ_API_KEY est défini ou installez pytesseract / easyocr."
+            )
 
         return _heuristic_structured_csv(raw_text, document_type=document_type)
 

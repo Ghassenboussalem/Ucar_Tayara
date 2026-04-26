@@ -22,6 +22,7 @@ export default function ReportsPage() {
   const [instId, setInstId] = useState('')
   const [format, setFormat] = useState('pdf')
   const [period, setPeriod] = useState('')
+  const [reportLang, setReportLang] = useState('fr')
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
@@ -38,7 +39,7 @@ export default function ReportsPage() {
     if (!instId || !period) { setError(tx('Veuillez sélectionner une institution et une période.', 'يرجى اختيار المؤسسة والفترة.')); return }
     setLoading(true); setSuccess(''); setError('')
     try {
-      const res = await generateReport(parseInt(instId), period, format)
+      const res = await generateReport(parseInt(instId), period, format, reportLang)
       const blob = new Blob([res.data], { type: res.headers['content-type'] })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -127,6 +128,22 @@ export default function ReportsPage() {
             </div>
           </div>
 
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#374151' }}>{tx('Langue du rapport', 'لغة التقرير')}</label>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              {[
+                { id: 'fr', label: 'Français', flag: '🇫🇷' },
+                { id: 'ar', label: 'عربي',     flag: '🇹🇳' },
+              ].map((l) => (
+                <div key={l.id} onClick={() => setReportLang(l.id)}
+                  style={{ flex: 1, padding: '12px', borderRadius: '10px', border: `2px solid ${reportLang === l.id ? 'rgb(29,83,148)' : '#e2e8f0'}`, background: reportLang === l.id ? 'rgba(29,83,148,0.04)' : 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', transition: 'all 150ms' }}>
+                  <span style={{ fontSize: '1.1rem' }}>{l.flag}</span>
+                  <span style={{ fontSize: '0.82rem', fontWeight: 700, color: reportLang === l.id ? 'rgb(29,83,148)' : '#374151' }}>{l.label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {error && <div style={{ padding: '10px 14px', borderRadius: '8px', background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: '0.8rem' }}>{error}</div>}
           {success && <div style={{ padding: '10px 14px', borderRadius: '8px', background: '#f0fdf4', border: '1px solid #bbf7d0', color: '#16a34a', fontSize: '0.8rem' }}>{success}</div>}
 
@@ -140,7 +157,7 @@ export default function ReportsPage() {
           <div style={{ background: 'linear-gradient(135deg, rgb(20,58,105), rgb(29,83,148))', borderRadius: '14px', padding: '24px', color: 'white' }}>
             <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6, marginBottom: '8px' }}>{tx('Aperçu du rapport', 'معاينة التقرير')}</div>
             <div style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '4px' }}>{selectedInst?.name_fr || '—'}</div>
-            <div style={{ fontSize: '0.82rem', opacity: 0.7 }}>{tx('Période', 'الفترة')} : {period || '—'} · {tx('Format', 'الصيغة')} : {format.toUpperCase()}</div>
+            <div style={{ fontSize: '0.82rem', opacity: 0.7 }}>{tx('Période', 'الفترة')} : {period || '—'} · {tx('Format', 'الصيغة')} : {format.toUpperCase()} · {reportLang === 'ar' ? '🇹🇳 عربي' : '🇫🇷 Français'}</div>
           </div>
 
           <div style={{ background: 'white', borderRadius: '14px', padding: '20px', border: '1px solid #e2e8f0' }}>

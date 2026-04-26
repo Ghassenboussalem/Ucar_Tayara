@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
+from urllib.parse import quote
 from database import get_db
 from models.models import Institution, AcademicKPI, FinanceKPI, HRKPI, Alert, User, EmploymentKPI, InfrastructureKPI, PartnershipKPI, ESGKPI, ResearchKPI
 from models.schemas import *
@@ -951,18 +952,20 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
         "director_name": inst.director_name,
     }
 
+    lang = getattr(request, 'lang', 'fr') or 'fr'
+
     if request.format == "excel":
         content = generate_excel_report(
             institution=institution_dict,
             period=request.period,
             academic=academic_dict,
             finance=finance_dict,
-            hr=hr_dict
+            hr=hr_dict,
+            lang=lang,
         )
-        filename = f"rapport_{inst.code}_{request.period}.xlsx"
+        filename = f"{'تقرير' if lang == 'ar' else 'rapport'}_{inst.code}_{request.period}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        # Generate AI summary first
         ai_summary = generate_report_summary(
             institution_name=inst.name_fr,
             period=request.period,
@@ -978,15 +981,16 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
             finance=finance_dict,
             hr=hr_dict,
             alerts=alerts_list,
-            ai_summary=ai_summary
+            ai_summary=ai_summary,
+            lang=lang,
         )
-        filename = f"rapport_{inst.code}_{request.period}.pdf"
+        filename = f"{'تقرير' if lang == 'ar' else 'rapport'}_{inst.code}_{request.period}.pdf"
         media_type = "application/pdf"
 
     return Response(
         content=content,
         media_type=media_type,
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"}
     )
 
 

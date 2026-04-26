@@ -85,10 +85,10 @@ export const getCausalDetail = (kpiName) =>
   client.get(`/causal/${kpiName}`).then((r) => r.data)
 
 // ── Reports ───────────────────────────────────────────────────
-export const generateReport = (institution_id, period, format, report_type = 'monthly') =>
+export const generateReport = (institution_id, period, format, lang = 'fr', report_type = 'monthly') =>
   client.post(
     '/reports/generate',
-    { institution_id, period, format, report_type },
+    { institution_id, period, format, report_type, lang },
     { responseType: 'blob' }
   ).then((r) => r)
 
@@ -179,5 +179,22 @@ export const etlDemoTrigger = (scenario) => {
 
 export const etlGetTemplates = () =>
   etlClient.get('/api/templates').then((r) => r.data)
+
+export const etlEmailStatus = () =>
+  fetch(`${ETL_BASE}/api/email/status`).then((r) => r.json())
+
+// Returns a native EventSource connected to the ETL email SSE stream.
+// Caller is responsible for calling .close() when done.
+export function etlEmailEvents() {
+  return new EventSource(`${ETL_BASE}/api/email/events`)
+}
+
+// Inject a simulated event into the SSE stream (demo / dev use).
+export const etlEmailSimulate = (payload) =>
+  fetch(`${ETL_BASE}/api/email/simulate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then((r) => r.json())
 
 export default client

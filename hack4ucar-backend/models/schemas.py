@@ -168,6 +168,7 @@ class ReportRequest(BaseModel):
     report_type: str  # 'monthly', 'semester', 'annual'
     period: str       # e.g. 'S1_2023', '2023'
     format: str       # 'pdf', 'excel'
+    lang: str = "fr"  # 'fr' | 'ar'
 
 
 # ─── Dashboard Summary ────────────────────────────────────────

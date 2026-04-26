@@ -12,18 +12,6 @@ import {
   Network,
   Map,
   Brain,
-  FlaskConical,
-  Handshake,
-  HeartPulse,
-  HardHat,
-  Cpu,
-  Package,
-  BookOpen,
-  Leaf,
-  Target,
-  Truck,
-  GraduationCap,
-  ClipboardList,
   DatabaseZap,
 } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
@@ -52,20 +40,6 @@ const NAV = [
   },
 ]
 
-const COMING_SOON = [
-  { icon: FlaskConical, labelKey: 'mod.research' },
-  { icon: Handshake, labelKey: 'mod.partnerships' },
-  { icon: HeartPulse, labelKey: 'mod.student' },
-  { icon: HardHat, labelKey: 'mod.infra' },
-  { icon: Cpu, labelKey: 'mod.equipment' },
-  { icon: Package, labelKey: 'mod.inventory' },
-  { icon: BookOpen, labelKey: 'mod.training' },
-  { icon: Leaf, labelKey: 'mod.esg' },
-  { icon: Target, labelKey: 'mod.strategy' },
-  { icon: Truck, labelKey: 'mod.logistics' },
-  { icon: GraduationCap, labelKey: 'mod.pedagogy' },
-  { icon: ClipboardList, labelKey: 'mod.scolarite' },
-]
 
 export default function Sidebar() {
   const navigate = useNavigate()
@@ -132,17 +106,6 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* Coming soon */}
-        <div style={styles.navGroup}>
-          <div style={styles.navSection}>{t('nav.coming')}</div>
-          {COMING_SOON.map((mod) => (
-            <div key={mod.labelKey} style={styles.lockedItem}>
-              <mod.icon size={15} style={{ flexShrink: 0, opacity: 0.35 }} />
-              <span style={styles.lockedLabel}>{t(mod.labelKey)}</span>
-              <Lock size={11} style={{ marginInlineStart: 'auto', opacity: 0.3 }} />
-            </div>
-          ))}
-        </div>
       </nav>
 
       <div style={{ flex: 1 }} />
@@ -263,21 +226,6 @@ const styles = {
     fontWeight: 600,
   },
   navLabel: { flex: 1 },
-  lockedItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '6px 10px',
-    borderRadius: '8px',
-    color: 'rgba(255,255,255,0.28)',
-    fontSize: '0.78rem',
-    fontWeight: 500,
-    cursor: 'default',
-  },
-  lockedLabel: {
-    flex: 1,
-    opacity: 0.7,
-  },
   aiTag: {
     margin: '8px 10px 12px',
     padding: '10px 12px',
