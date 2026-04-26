@@ -4,7 +4,11 @@ from io import BytesIO
 from io import StringIO
 
 
-ALLOWED_EXTENSIONS = {".csv", ".txt", ".json", ".xlsx", ".pdf", ".png", ".jpg", ".jpeg"}
+ALLOWED_EXTENSIONS = {
+    ".csv", ".txt", ".json", ".xlsx",
+    ".pdf",
+    ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif",
+}
 
 
 def detect_file_extension(filename: str) -> str:

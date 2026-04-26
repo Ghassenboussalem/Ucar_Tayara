@@ -233,158 +233,124 @@ def scan_all_institutions(db: Session) -> dict[str, int]:
 
 # ─── Domain writers ───────────────────────────────────────────────────────────
 
-def _write_academic(db: Session, institution_id: int, period: str, data: dict) -> AcademicKPI:
-    kpi = AcademicKPI(
-        institution_id=institution_id,
-        semester=period,
-        total_enrolled=data.get("total_enrolled"),
-        total_passed=data.get("total_passed"),
-        total_failed=data.get("total_failed"),
-        total_dropped=data.get("total_dropped"),
-        success_rate=data.get("success_rate"),
-        dropout_rate=data.get("dropout_rate"),
-        attendance_rate=data.get("attendance_rate"),
-        repetition_rate=data.get("repetition_rate"),
-        avg_grade=data.get("avg_grade"),
-    )
-    db.add(kpi)
+def _upsert(db: Session, model_class, period_field: str, institution_id: int, period: str, fields: dict):
+    kpi = db.query(model_class).filter_by(
+        institution_id=institution_id, **{period_field: period}
+    ).first()
+    if kpi is None:
+        kpi = model_class(institution_id=institution_id, **{period_field: period})
+        db.add(kpi)
+    for k, v in fields.items():
+        setattr(kpi, k, v)
     db.commit()
     db.refresh(kpi)
     return kpi
+
+
+def _write_academic(db: Session, institution_id: int, period: str, data: dict) -> AcademicKPI:
+    return _upsert(db, AcademicKPI, "semester", institution_id, period, {
+        "total_enrolled": data.get("total_enrolled"),
+        "total_passed": data.get("total_passed"),
+        "total_failed": data.get("total_failed"),
+        "total_dropped": data.get("total_dropped"),
+        "success_rate": data.get("success_rate"),
+        "dropout_rate": data.get("dropout_rate"),
+        "attendance_rate": data.get("attendance_rate"),
+        "repetition_rate": data.get("repetition_rate"),
+        "avg_grade": data.get("avg_grade"),
+    })
 
 
 def _write_finance(db: Session, institution_id: int, period: str, data: dict) -> FinanceKPI:
-    kpi = FinanceKPI(
-        institution_id=institution_id,
-        fiscal_year=period,
-        allocated_budget=data.get("allocated_budget"),
-        consumed_budget=data.get("consumed_budget"),
-        budget_execution_rate=data.get("budget_execution_rate"),
-        cost_per_student=data.get("cost_per_student"),
-        staff_budget_pct=data.get("staff_budget_pct"),
-        infrastructure_budget_pct=data.get("infrastructure_budget_pct"),
-        research_budget_pct=data.get("research_budget_pct"),
-        other_budget_pct=data.get("other_budget_pct"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, FinanceKPI, "fiscal_year", institution_id, period, {
+        "allocated_budget": data.get("allocated_budget"),
+        "consumed_budget": data.get("consumed_budget"),
+        "budget_execution_rate": data.get("budget_execution_rate"),
+        "cost_per_student": data.get("cost_per_student"),
+        "staff_budget_pct": data.get("staff_budget_pct"),
+        "infrastructure_budget_pct": data.get("infrastructure_budget_pct"),
+        "research_budget_pct": data.get("research_budget_pct"),
+        "other_budget_pct": data.get("other_budget_pct"),
+    })
 
 
 def _write_hr(db: Session, institution_id: int, period: str, data: dict) -> HRKPI:
-    kpi = HRKPI(
-        institution_id=institution_id,
-        semester=period,
-        total_teaching_staff=data.get("total_teaching_staff"),
-        total_admin_staff=data.get("total_admin_staff"),
-        absenteeism_rate=data.get("absenteeism_rate"),
-        avg_teaching_load_hours=data.get("avg_teaching_load_hours"),
-        staff_turnover_rate=data.get("staff_turnover_rate"),
-        training_completion_rate=data.get("training_completion_rate"),
-        permanent_staff_pct=data.get("permanent_staff_pct"),
-        contract_staff_pct=data.get("contract_staff_pct"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, HRKPI, "semester", institution_id, period, {
+        "total_teaching_staff": data.get("total_teaching_staff"),
+        "total_admin_staff": data.get("total_admin_staff"),
+        "absenteeism_rate": data.get("absenteeism_rate"),
+        "avg_teaching_load_hours": data.get("avg_teaching_load_hours"),
+        "staff_turnover_rate": data.get("staff_turnover_rate"),
+        "training_completion_rate": data.get("training_completion_rate"),
+        "permanent_staff_pct": data.get("permanent_staff_pct"),
+        "contract_staff_pct": data.get("contract_staff_pct"),
+    })
 
 
 def _write_esg(db: Session, institution_id: int, period: str, data: dict) -> ESGKPI:
-    kpi = ESGKPI(
-        institution_id=institution_id,
-        fiscal_year=period,
-        energy_consumption_kwh=data.get("energy_consumption_kwh"),
-        carbon_footprint_tons=data.get("carbon_footprint_tons"),
-        recycling_rate=data.get("recycling_rate"),
-        green_spaces_sqm=data.get("green_spaces_sqm"),
-        sustainable_mobility_pct=data.get("sustainable_mobility_pct"),
-        accessibility_score=data.get("accessibility_score"),
-        waste_produced_tons=data.get("waste_produced_tons"),
-        water_consumption_m3=data.get("water_consumption_m3"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, ESGKPI, "fiscal_year", institution_id, period, {
+        "energy_consumption_kwh": data.get("energy_consumption_kwh"),
+        "carbon_footprint_tons": data.get("carbon_footprint_tons"),
+        "recycling_rate": data.get("recycling_rate"),
+        "green_spaces_sqm": data.get("green_spaces_sqm"),
+        "sustainable_mobility_pct": data.get("sustainable_mobility_pct"),
+        "accessibility_score": data.get("accessibility_score"),
+        "waste_produced_tons": data.get("waste_produced_tons"),
+        "water_consumption_m3": data.get("water_consumption_m3"),
+    })
 
 
 def _write_research(db: Session, institution_id: int, period: str, data: dict) -> ResearchKPI:
-    kpi = ResearchKPI(
-        institution_id=institution_id,
-        academic_year=period,
-        publications_count=data.get("publications_count"),
-        active_projects=data.get("active_projects"),
-        funding_secured_tnd=data.get("funding_secured_tnd"),
-        phd_students=data.get("phd_students"),
-        patents_filed=data.get("patents_filed"),
-        international_collaborations=data.get("international_collaborations"),
-        national_collaborations=data.get("national_collaborations"),
-        conferences_attended=data.get("conferences_attended"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, ResearchKPI, "academic_year", institution_id, period, {
+        "publications_count": data.get("publications_count"),
+        "active_projects": data.get("active_projects"),
+        "funding_secured_tnd": data.get("funding_secured_tnd"),
+        "phd_students": data.get("phd_students"),
+        "patents_filed": data.get("patents_filed"),
+        "international_collaborations": data.get("international_collaborations"),
+        "national_collaborations": data.get("national_collaborations"),
+        "conferences_attended": data.get("conferences_attended"),
+    })
 
 
 def _write_employment(db: Session, institution_id: int, period: str, data: dict) -> EmploymentKPI:
-    kpi = EmploymentKPI(
-        institution_id=institution_id,
-        graduation_year=period,
-        graduates_total=data.get("graduates_total"),
-        employed_within_6months=data.get("employed_within_6months"),
-        employed_within_12months=data.get("employed_within_12months"),
-        employability_rate_6m=data.get("employability_rate_6m"),
-        employability_rate_12m=data.get("employability_rate_12m"),
-        avg_months_to_employment=data.get("avg_months_to_employment"),
-        national_employment_pct=data.get("national_employment_pct"),
-        international_employment_pct=data.get("international_employment_pct"),
-        self_employed_pct=data.get("self_employed_pct"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, EmploymentKPI, "graduation_year", institution_id, period, {
+        "graduates_total": data.get("graduates_total"),
+        "employed_within_6months": data.get("employed_within_6months"),
+        "employed_within_12months": data.get("employed_within_12months"),
+        "employability_rate_6m": data.get("employability_rate_6m"),
+        "employability_rate_12m": data.get("employability_rate_12m"),
+        "avg_months_to_employment": data.get("avg_months_to_employment"),
+        "national_employment_pct": data.get("national_employment_pct"),
+        "international_employment_pct": data.get("international_employment_pct"),
+        "self_employed_pct": data.get("self_employed_pct"),
+    })
 
 
 def _write_infrastructure(db: Session, institution_id: int, period: str, data: dict) -> InfrastructureKPI:
-    kpi = InfrastructureKPI(
-        institution_id=institution_id,
-        semester=period,
-        classroom_occupancy_rate=data.get("classroom_occupancy_rate"),
-        it_equipment_status_pct=data.get("it_equipment_status_pct"),
-        equipment_availability_rate=data.get("equipment_availability_rate"),
-        ongoing_works=data.get("ongoing_works"),
-        maintenance_requests=data.get("maintenance_requests"),
-        resolved_requests=data.get("resolved_requests"),
-        lab_availability_rate=data.get("lab_availability_rate"),
-        library_capacity_used_pct=data.get("library_capacity_used_pct"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, InfrastructureKPI, "semester", institution_id, period, {
+        "classroom_occupancy_rate": data.get("classroom_occupancy_rate"),
+        "it_equipment_status_pct": data.get("it_equipment_status_pct"),
+        "equipment_availability_rate": data.get("equipment_availability_rate"),
+        "ongoing_works": data.get("ongoing_works"),
+        "maintenance_requests": data.get("maintenance_requests"),
+        "resolved_requests": data.get("resolved_requests"),
+        "lab_availability_rate": data.get("lab_availability_rate"),
+        "library_capacity_used_pct": data.get("library_capacity_used_pct"),
+    })
 
 
 def _write_partnership(db: Session, institution_id: int, period: str, data: dict) -> PartnershipKPI:
-    kpi = PartnershipKPI(
-        institution_id=institution_id,
-        academic_year=period,
-        active_national_agreements=data.get("active_national_agreements"),
-        active_international_agreements=data.get("active_international_agreements"),
-        incoming_students=data.get("incoming_students"),
-        outgoing_students=data.get("outgoing_students"),
-        erasmus_partnerships=data.get("erasmus_partnerships"),
-        joint_programs=data.get("joint_programs"),
-        industry_partnerships=data.get("industry_partnerships"),
-        international_projects=data.get("international_projects"),
-    )
-    db.add(kpi)
-    db.commit()
-    db.refresh(kpi)
-    return kpi
+    return _upsert(db, PartnershipKPI, "academic_year", institution_id, period, {
+        "active_national_agreements": data.get("active_national_agreements"),
+        "active_international_agreements": data.get("active_international_agreements"),
+        "incoming_students": data.get("incoming_students"),
+        "outgoing_students": data.get("outgoing_students"),
+        "erasmus_partnerships": data.get("erasmus_partnerships"),
+        "joint_programs": data.get("joint_programs"),
+        "industry_partnerships": data.get("industry_partnerships"),
+        "international_projects": data.get("international_projects"),
+    })
 
 
 _WRITERS = {

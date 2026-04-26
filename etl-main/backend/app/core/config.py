@@ -32,6 +32,17 @@ class Settings:
     main_platform_url: str = os.getenv("MAIN_PLATFORM_URL", "http://localhost:8000")
     etl_api_key: str = os.getenv("ETL_API_KEY", "")
     push_to_platform: bool = os.getenv("PUSH_TO_PLATFORM", "false").lower() == "true"
+    # Email ingestion (IMAP)
+    email_enabled: bool = os.getenv("EMAIL_ENABLED", "false").lower() == "true"
+    email_imap_host: str = os.getenv("EMAIL_IMAP_HOST", "imap.gmail.com")
+    email_imap_port: int = int(os.getenv("EMAIL_IMAP_PORT", "993"))
+    email_address: str = os.getenv("EMAIL_ADDRESS", "")
+    email_password: str = os.getenv("EMAIL_PASSWORD", "")
+    email_folder: str = os.getenv("EMAIL_FOLDER", "INBOX")
+    email_poll_seconds: int = int(os.getenv("EMAIL_POLL_SECONDS", "30"))
+    email_institution_default: str = os.getenv("EMAIL_INSTITUTION_DEFAULT", "EPT")
+    email_domain_default: str = os.getenv("EMAIL_DOMAIN_DEFAULT", "academic")
+    email_period_default: str = os.getenv("EMAIL_PERIOD_DEFAULT", "S1_2025")
 
 
 settings = Settings()

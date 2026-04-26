@@ -1,10 +1,29 @@
 """
 Generate test PDF and PNG files for UCAR ETL ingestion testing.
 Run: python generate_test_files.py
-Output: SUPCOM_finance_S1_2025.pdf  and  IHEC_hr_S1_2025_source.pdf
+Output:
+  SUPCOM_finance_S1_2025.pdf     — French finance report
+  IHEC_hr_S1_2025_source.pdf    — French HR report
+  IHEC_hr_S1_2025_arabic.pdf    — Arabic HR report (same data, Arabic text)
 """
 from fpdf import FPDF
 import os
+
+# ── Arabic text helpers ───────────────────────────────────────────────────────
+try:
+    import arabic_reshaper          # type: ignore
+    from bidi.algorithm import get_display  # type: ignore
+
+    def ar(text: str) -> str:
+        """Reshape + apply bidi so fpdf2 (LTR renderer) displays Arabic correctly."""
+        return get_display(arabic_reshaper.reshape(text))
+
+    ARABIC_FONT = "C:\\Windows\\Fonts\\trado.ttf"   # Traditional Arabic (always on Windows)
+    _ARABIC_OK = os.path.exists(ARABIC_FONT)
+except ImportError:
+    def ar(text: str) -> str:  # type: ignore[misc]
+        return text
+    _ARABIC_OK = False
 
 OUT = os.path.dirname(os.path.abspath(__file__))
 
@@ -282,6 +301,185 @@ try:
 except Exception:
     print("[INFO] Open IHEC_hr_S1_2025_source.pdf and screenshot page 1 -> save as IHEC_hr_S1_2025.png")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PDF 3 : IHEC HR Report — Arabic version
+# Same dataset as PDF 2, all labels in Arabic.
+# Requires: pip install arabic-reshaper python-bidi
+# Font:     C:\Windows\Fonts\trado.ttf  (Traditional Arabic — always on Windows)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if not _ARABIC_OK:
+    print("[SKIP] Arabic PDF: install 'arabic-reshaper' and 'python-bidi' then re-run")
+else:
+    class ArabicHrPDF(FPDF):
+        def header(self):
+            self.set_fill_color(*BLUE)
+            self.rect(0, 0, 210, 30, "F")
+            self.set_font("Ar", size=14)
+            self.set_text_color(255, 255, 255)
+            self.set_xy(10, 4)
+            self.cell(0, 8, ar("معهد الدراسات التجارية العليا - قرطاج  |  IHEC Carthage"), align="R")
+            self.set_font("Ar", size=9)
+            self.set_xy(10, 13)
+            self.cell(0, 6, ar("تقرير الموارد البشرية - الفصل الأول 2025  |  document_type: hr"), align="R")
+            self.set_text_color(0, 0, 0)
+            self.ln(6)
+
+        def footer(self):
+            self.set_y(-14)
+            self.set_font("Ar", size=7)
+            self.set_text_color(*GRAY)
+            self.cell(0, 8, ar(f"صفحة {self.page_no()} - وثيقة تجريبية - سري"), align="C")
+
+    def ar_kpi_boxes(pdf, items, box_w=44):
+        """KPI boxes with Arabic labels (right-to-left layout)."""
+        # Start from right margin and go left
+        start_x = 198 - box_w
+        y = pdf.get_y()
+        for label, val, color in items:
+            pdf.set_fill_color(*color)
+            pdf.rect(start_x, y, box_w, 18, "F")
+            pdf.set_text_color(255, 255, 255)
+            pdf.set_font("Ar", size=7)
+            pdf.set_xy(start_x + 2, y + 2)
+            pdf.cell(box_w - 4, 5, ar(label), align="R")
+            pdf.set_font("Ar", size=12)
+            pdf.set_xy(start_x + 2, y + 8)
+            pdf.cell(box_w - 4, 7, val, align="C")
+            start_x -= (box_w + 2)
+        pdf.set_xy(12, y + 20)
+        pdf.ln(4)
+        pdf.set_text_color(0, 0, 0)
+
+    def ar_stitle(pdf, text, color=BLUE):
+        pdf.set_font("Ar", size=11)
+        pdf.set_text_color(*color)
+        pdf.set_xy(pdf.get_x(), pdf.get_y() + 2)
+        pdf.cell(0, 7, ar(text), align="R")
+        pdf.ln()
+        pdf.set_draw_color(*color)
+        pdf.set_line_width(0.5)
+        pdf.line(12, pdf.get_y(), 198, pdf.get_y())
+        pdf.ln(4)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_draw_color(0, 0, 0)
+        pdf.set_line_width(0.2)
+
+    def ar_hrow(pdf, cols, widths, bg=BLUE, fg=(255, 255, 255)):
+        pdf.set_fill_color(*bg)
+        pdf.set_text_color(*fg)
+        pdf.set_font("Ar", size=7)
+        # RTL: render columns right→left
+        x = 198
+        for col, w in zip(cols, widths):
+            x -= w
+            pdf.set_xy(x, pdf.get_y())
+            pdf.cell(w, 7, ar(col), border=1, fill=True, align="C")
+        pdf.ln()
+        pdf.set_text_color(0, 0, 0)
+
+    def ar_drow(pdf, values, widths, shade=False, alert=False):
+        pdf.set_font("Ar", size=7)
+        pdf.set_fill_color(*(LIGHT if shade else (255, 255, 255)))
+        pdf.set_text_color(*(RED if alert else (0, 0, 0)))
+        x = 198
+        for val, w in zip(values, widths):
+            x -= w
+            pdf.set_xy(x, pdf.get_y())
+            pdf.cell(w, 6, ar(str(val)) if isinstance(val, str) else str(val),
+                     border=1, fill=True, align="C")
+        pdf.ln()
+        pdf.set_text_color(0, 0, 0)
+
+    # ── Build the PDF ─────────────────────────────────────────────────────────
+    ap = ArabicHrPDF()
+    ap.add_font("Ar", fname=ARABIC_FONT)   # register once before any page
+    ap.set_auto_page_break(auto=True, margin=20)
+    ap.add_page()
+    ap.set_margins(12, 34, 12)
+
+    # KPI summary row
+    ap.set_font("Ar", size=9)
+    ap.set_text_color(*GRAY)
+    ap.cell(0, 5, ar("مؤشرات الأداء الرئيسية - الفصل الأول 2025"), align="R")
+    ap.ln(3)
+
+    ar_kpi_boxes(ap, [
+        ("إجمالي الموظفين",  "142 موظفاً", BLUE),
+        ("معدل الغياب",      "26.4 %",     RED),
+        ("أيام مفقودة",      "2 847 يوم",  RED),
+        ("معدل الدوران",     "11.3 %",     AMBER),
+    ])
+
+    ar_stitle(ap, "الموظفون حسب القسم ونوع الكادر")
+
+    # Table: القسم | النوع | العدد | أيام العمل | أيام الغياب | % الغياب | مستقيلون
+    col_ar = ["القسم", "النوع", "العدد", "أيام العمل", "أيام الغياب", "% الغياب", "مستقيلون"]
+    col_w  = [46, 28, 16, 18, 18, 18, 16]
+    ar_hrow(ap, col_ar, col_w)
+
+    ar_rows = [
+        ("المالية والمحاسبة",     "أستاذ",     22, 115, 38, "33.9", 2),
+        ("المالية والمحاسبة",     "إداري",      8, 115, 24, "26.1", 0),
+        ("الإدارة والاستراتيجية", "أستاذ",     28, 115, 41, "36.6", 3),
+        ("قانون الأعمال",         "أستاذ",     18, 115, 29, "25.2", 1),
+        ("إعلامية التسيير",       "أستاذ",     16, 115, 35, "31.3", 2),
+        ("التسويق",               "أستاذ",     12, 115, 22, "19.1", 0),
+        ("الاقتصاد",              "أستاذ",     14, 115, 32, "28.6", 1),
+        ("شؤون الطلاب",           "إداري",     12, 115, 28, "24.3", 0),
+        ("الخدمات العامة",        "تقني",       8, 115, 19, "20.7", 1),
+        ("المكتبة والتوثيق",      "إداري",      4, 115, 15, "32.6", 0),
+    ]
+    for i, row in enumerate(ar_rows):
+        ar_drow(ap, row, col_w, shade=(i % 2 == 0), alert=(float(row[5]) > 20))
+
+    ap.ln(5)
+    ar_stitle(ap, "تحليل وملاحظات")
+    ap.set_font("Ar", size=8)
+    ap.set_text_color(*GRAY)
+    ap.multi_cell(0, 5, ar(
+        "يتجاوز معدل الغياب الإجمالي البالغ 26.4% الحد التحذيري المحدد بـ 20%. "
+        "تسجل إدارة الاستراتيجية أعلى معدل (36.6%)، تليها المالية والمحاسبة (33.9%). "
+        "معدل الدوران 11.3% يرتفع بـ 3.2 نقطة مقارنة بالفصل الأول 2024. "
+        "يُوصى بإجراء استبيان مناخ اجتماعي بصفة عاجلة."
+    ), align="R")
+    ap.ln(4)
+
+    # Machine-readable ETL anchor line (always in English/ASCII for parser)
+    ar_stitle(ap, "بيانات الاستخراج الآلي (ETL)")
+    ap.set_font("Ar", size=7)
+    ap.set_text_color(*GRAY)
+    ap.cell(0, 4, "employee_id | department | staff_type | headcount | working_days | absent_days | resigned | hired", align="L")
+    ap.ln()
+    ap.set_text_color(0, 0, 0)
+    raw_ar = [
+        ("EMP-G01", "Finance & Comptabilite",   "enseignant",    22, 115, 38, 2, 0),
+        ("EMP-G02", "Finance & Comptabilite",   "administratif",  8, 115, 24, 0, 0),
+        ("EMP-G03", "Management & Strategie",   "enseignant",    28, 115, 41, 3, 1),
+        ("EMP-G04", "Droit des Affaires",       "enseignant",    18, 115, 29, 1, 0),
+        ("EMP-G05", "Informatique de Gestion",  "enseignant",    16, 115, 35, 2, 1),
+        ("EMP-G06", "Marketing",                "enseignant",    12, 115, 22, 0, 0),
+        ("EMP-G07", "Economie",                 "enseignant",    14, 115, 32, 1, 0),
+        ("EMP-G08", "Administration Scolarite", "administratif", 12, 115, 28, 0, 0),
+        ("EMP-G09", "Services Generaux",        "technique",      8, 115, 19, 1, 0),
+        ("EMP-G10", "Bibliotheque & Doc",       "administratif",  4, 115, 15, 0, 0),
+    ]
+    ap.set_font("Helvetica", "", 6.5)
+    for row in raw_ar:
+        ap.cell(0, 4, " | ".join(str(v) for v in row), ln=True)
+
+    ap.ln(4)
+    ap.set_font("Helvetica", "I", 7)
+    ap.set_text_color(*GRAY)
+    ap.cell(0, 5, "institution: IHEC | period: S1_2025 | document_type: hr | lang: ar | generated: 2025-06-30", ln=True)
+
+    out3 = os.path.join(OUT, "IHEC_hr_S1_2025_arabic.pdf")
+    ap.output(out3)
+    print(f"[OK] PDF 3 saved: {out3}")
+
+
 print(f"\nAll done. Files in: {OUT}")
-print("\nUpload SUPCOM_finance_S1_2025.pdf -> institution SUPCOM -> triggers budget alert")
-print("Upload IHEC_hr_S1_2025.png        -> institution IHEC  -> triggers absenteeism alert")
+print("\nUpload SUPCOM_finance_S1_2025.pdf  -> institution SUPCOM -> triggers budget alert")
+print("Upload IHEC_hr_S1_2025.png         -> institution IHEC  -> triggers absenteeism alert")
+print("Upload IHEC_hr_S1_2025_arabic.pdf  -> institution IHEC  -> Arabic HR report")

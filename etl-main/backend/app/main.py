@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.routes_auth import router as auth_router
+from app.api.routes_email import router as email_router
 from app.api.routes_ingestion import router as ingestion_router
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
@@ -44,7 +45,7 @@ register_exception_handlers(app)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -52,8 +53,16 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(ingestion_router)
+app.include_router(email_router)
 if web_dir.exists():
     app.mount("/ui", StaticFiles(directory=str(web_dir), html=True), name="ui")
+
+
+@app.on_event("startup")
+async def startup_email_listener():
+    import asyncio
+    from app.services.email_service import email_polling_loop
+    asyncio.create_task(email_polling_loop())
 
 
 @app.get("/health")
