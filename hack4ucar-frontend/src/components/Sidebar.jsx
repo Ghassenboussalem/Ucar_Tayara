@@ -74,16 +74,11 @@ export default function Sidebar() {
     <aside style={sideStyle}>
       {/* Logo */}
       <div style={styles.logo}>
-        <div style={styles.logoIcon}>
-          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
-            {/* Shield crest shape */}
-            <path d="M24 4 L40 10 L40 26 C40 35 32 42 24 45 C16 42 8 35 8 26 L8 10 Z" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5"/>
-            {/* U letter */}
-            <path d="M16 16 L16 26 C16 31 20 33 24 33 C28 33 32 31 32 26 L32 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
-            {/* Crossbar decoration */}
-            <path d="M19 37 L29 37" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </div>
+        <img
+          src="/ucar-logo.jpg"
+          alt="Université de Carthage"
+          style={{ width: '38px', height: '38px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0, background: 'white' }}
+        />
         <div>
           <div style={styles.logoName}>UCAR Intelligence</div>
           <div style={styles.logoSub}>Université de Carthage</div>

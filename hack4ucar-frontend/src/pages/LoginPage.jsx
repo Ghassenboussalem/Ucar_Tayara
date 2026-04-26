@@ -43,13 +43,11 @@ export default function LoginPage() {
       {/* Left panel — branding */}
       <div style={styles.leftPanel}>
         <div style={styles.brandWrap}>
-          <div style={styles.logoMark}>
-            <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
-              <rect width="32" height="32" rx="8" fill="rgba(255,255,255,0.15)" />
-              <path d="M8 22 L16 10 L24 22" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              <path d="M11 18 L21 18" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
-            </svg>
-          </div>
+          <img
+            src="/ucar-logo.jpg"
+            alt="Université de Carthage"
+            style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', background: 'white', flexShrink: 0 }}
+          />
           <span style={styles.logoText}>UCAR Intelligence</span>
         </div>
 
