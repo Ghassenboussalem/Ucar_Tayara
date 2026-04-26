@@ -2,7 +2,6 @@
 Email ingestion routes.
   GET  /api/email/status   — polling stats & config
   GET  /api/email/events   — SSE stream of real-time ingestion events
-  POST /api/email/simulate — inject a test event (demo/dev only)
 """
 import asyncio
 import json
