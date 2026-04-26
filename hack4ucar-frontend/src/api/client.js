@@ -98,4 +98,79 @@ export const getForecastHR = (institutionId, kpiField) =>
 export const getRiskMatrix = () =>
   client.get('/forecast/risk-matrix').then((r) => r.data)
 
+// ── Platform KPI import (from ETL bridge) ─────────────────────
+export const getRecentAlerts = (limit = 10) =>
+  client.get('/alerts', { params: { limit } }).then((r) => r.data)
+
+// ── ETL service (port 8001) ───────────────────────────────────
+const ETL_BASE = import.meta.env.VITE_ETL_URL || 'http://localhost:8001'
+
+const etlClient = axios.create({ baseURL: ETL_BASE, timeout: 30000 })
+
+// ETL uses JWT — auto-login as admin1 and cache the token
+let _etlToken = null
+let _etlTokenPromise = null
+
+async function getEtlToken() {
+  if (_etlToken) return _etlToken
+  // Deduplicate concurrent requests while login is in flight
+  if (!_etlTokenPromise) {
+    _etlTokenPromise = axios
+      .post(`${ETL_BASE}/api/auth/login`, { username: 'admin1', password: 'admin123' })
+      .then((r) => { _etlToken = r.data.access_token; _etlTokenPromise = null; return _etlToken })
+      .catch((e) => { _etlTokenPromise = null; throw e })
+  }
+  return _etlTokenPromise
+}
+
+etlClient.interceptors.request.use(async (cfg) => {
+  try {
+    const token = await getEtlToken()
+    cfg.headers.Authorization = `Bearer ${token}`
+  } catch { /* offline — send without auth, will 401 gracefully */ }
+  return cfg
+})
+
+etlClient.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err.response?.status === 401) _etlToken = null // force re-login next call
+    return Promise.reject(err)
+  }
+)
+
+export const etlUploadFile = (file, institution, documentType) => {
+  const fd = new FormData()
+  fd.append('file', file)
+  fd.append('institution', institution)
+  if (documentType) fd.append('document_type', documentType)
+  return etlClient.post('/api/upload-async', fd).then((r) => r.data)
+}
+
+export const etlUploadBatch = (files, institution, documentType) => {
+  const fd = new FormData()
+  files.forEach((f) => fd.append('files', f))
+  fd.append('institution', institution)
+  if (documentType) fd.append('document_type', documentType)
+  return etlClient.post('/api/upload-batch', fd).then((r) => r.data)
+}
+
+export const etlGetJob = (jobId) =>
+  etlClient.get(`/api/jobs/${jobId}`).then((r) => r.data)
+
+export const etlListJobs = (limit = 20) =>
+  etlClient.get('/api/jobs', { params: { limit } }).then((r) => r.data)
+
+export const etlGetScenarios = () =>
+  etlClient.get('/api/demo/scenarios').then((r) => r.data)
+
+export const etlDemoTrigger = (scenario) => {
+  const fd = new FormData()
+  fd.append('scenario', scenario)
+  return etlClient.post('/api/demo/trigger', fd).then((r) => r.data)
+}
+
+export const etlGetTemplates = () =>
+  etlClient.get('/api/templates').then((r) => r.data)
+
 export default client

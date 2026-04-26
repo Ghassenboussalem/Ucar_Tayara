@@ -7,6 +7,7 @@ import {
 import { getAllKPIs } from '../api/client'
 import { ArrowLeft, GraduationCap, DollarSign, Users, Bell, Building2, Globe, Briefcase, Leaf, BookOpen } from 'lucide-react'
 import CausalTooltip from '../components/CausalTooltip'
+import { useLang } from '../contexts/LangContext'
 
 const TABS = [
   { id: 'academic',       label: 'Académique',          icon: GraduationCap },
@@ -22,6 +23,17 @@ const TABS = [
 
 const PIE_COLORS = ['#1d5394', '#059669', '#f59e0b', '#0891b2', '#7c3aed', '#dc2626']
 const SEV_COLOR  = { critical: '#dc2626', warning: '#f59e0b', info: '#3b82f6' }
+const TAB_LABELS_AR = {
+  academic: 'أكاديمي',
+  finance: 'مالي',
+  hr: 'الموارد البشرية',
+  infrastructure: 'البنية التحتية',
+  partnership: 'الشراكات',
+  employment: 'التشغيل',
+  esg: 'ESG / RSE',
+  research: 'البحث',
+  alerts: 'التنبيهات',
+}
 
 // ── Shared components ───────────────────────────────────────────────────────
 
@@ -120,6 +132,8 @@ const AXIS_TICK = { fontSize: 10, fill: '#94a3b8' }
 // ── Main page ───────────────────────────────────────────────────────────────
 
 export default function InstitutionDetailPage() {
+  const { lang } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const { id } = useParams()
   const navigate = useNavigate()
   const [data, setData] = useState(null)
@@ -135,8 +149,8 @@ export default function InstitutionDetailPage() {
     load()
   }, [id])
 
-  if (loading) return <div style={{ textAlign: 'center', padding: '80px', color: '#94a3b8' }}>Chargement…</div>
-  if (!data) return <div style={{ textAlign: 'center', padding: '80px', color: '#e74c3c' }}>Institution introuvable.</div>
+  if (loading) return <div style={{ textAlign: 'center', padding: '80px', color: '#94a3b8' }}>{tx('Chargement...', 'جاري التحميل...')}</div>
+  if (!data) return <div style={{ textAlign: 'center', padding: '80px', color: '#e74c3c' }}>{tx('Institution introuvable.', 'المؤسسة غير موجودة.')}</div>
 
   const inst       = data.institution
   const academic   = data.academic      || []
@@ -220,16 +234,16 @@ export default function InstitutionDetailPage() {
       <div>
         <button onClick={() => navigate(-1)}
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', border: '1.5px solid #e2e8f0', borderRadius: '8px', background: 'white', fontSize: '0.8rem', color: '#64748b', cursor: 'pointer', fontFamily: 'Inter,sans-serif', marginBottom: '14px' }}>
-          <ArrowLeft size={14} /> Retour
+          <ArrowLeft size={14} /> {tx('Retour', 'رجوع')}
         </button>
         <div style={{ background: 'linear-gradient(135deg,rgb(20,58,105),rgb(29,83,148))', borderRadius: '14px', padding: '24px 28px', color: 'white' }}>
           <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', opacity: 0.6, marginBottom: '5px' }}>{inst.code}</div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em', marginBottom: '10px' }}>{inst.name_fr}</h1>
           <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', alignItems: 'center' }}>
-            {[['📍', inst.city + ', ' + inst.governorate], ['👥', (inst.student_capacity || 0).toLocaleString('fr-FR') + ' étudiants'], ['🏛️', inst.type], ['👤', inst.director_name]].map(([icon, val]) => val && (
+            {[['📍', inst.city + ', ' + inst.governorate], ['👥', (inst.student_capacity || 0).toLocaleString('fr-FR') + ' ' + tx('étudiants', 'طالب')], ['🏛️', inst.type], ['👤', inst.director_name]].map(([icon, val]) => val && (
               <span key={val} style={{ fontSize: '0.82rem', opacity: 0.85 }}>{icon} {val}</span>
             ))}
-            {alerts.length > 0 && <span style={{ padding: '2px 10px', borderRadius: '99px', background: 'rgba(220,38,38,0.22)', color: '#fca5a5', fontSize: '0.75rem', fontWeight: 700 }}>🔔 {alerts.length} alerte(s)</span>}
+            {alerts.length > 0 && <span style={{ padding: '2px 10px', borderRadius: '99px', background: 'rgba(220,38,38,0.22)', color: '#fca5a5', fontSize: '0.75rem', fontWeight: 700 }}>🔔 {alerts.length} {tx('alerte(s)', 'تنبيه')}</span>}
           </div>
         </div>
       </div>
@@ -239,7 +253,7 @@ export default function InstitutionDetailPage() {
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 13px', borderRadius: '7px', border: 'none', fontSize: '0.77rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter,sans-serif', transition: 'all 150ms', background: tab === t.id ? 'rgb(29,83,148)' : 'transparent', color: tab === t.id ? 'white' : '#64748b' }}>
-            <t.icon size={13} /> {t.label}
+            <t.icon size={13} /> {lang === 'ar' ? TAB_LABELS_AR[t.id] : t.label}
             {t.id === 'alerts' && alerts.length > 0 && <span style={{ background: 'rgba(220,38,38,0.15)', color: '#dc2626', borderRadius: '99px', padding: '0 6px', fontSize: '0.7rem' }}>{alerts.length}</span>}
           </button>
         ))}

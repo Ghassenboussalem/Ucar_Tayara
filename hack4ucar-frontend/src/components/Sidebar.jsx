@@ -6,6 +6,7 @@ import {
   FileText,
   LogOut,
   ChevronRight,
+  ChevronLeft,
   TrendingUp,
   Lock,
   Brain,
@@ -21,48 +22,52 @@ import {
   Truck,
   GraduationCap,
   ClipboardList,
+  DatabaseZap,
 } from 'lucide-react'
+import { useLang } from '../contexts/LangContext'
 
 const NAV = [
   {
-    section: 'Vue d\'ensemble',
+    sectionKey: 'nav.overview',
     items: [
-      { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
+      { to: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
     ],
   },
   {
-    section: 'Données',
+    sectionKey: 'nav.data',
     items: [
-      { to: '/institutions', icon: Building2, label: 'Institutions' },
-      { to: '/alerts', icon: Bell, label: 'Alertes', badge: true },
+      { to: '/institutions', icon: Building2, labelKey: 'nav.institutions' },
+      { to: '/alerts', icon: Bell, labelKey: 'nav.alerts', badge: true },
+      { to: '/ingestion', icon: DatabaseZap, labelKey: 'nav.ingestion' },
     ],
   },
   {
-    section: 'Intelligence',
+    sectionKey: 'nav.intelligence',
     items: [
-      { to: '/reports', icon: FileText, label: 'Rapports' },
-      { to: '/analytics', icon: Brain, label: 'Analytique prédictive' },
+      { to: '/reports', icon: FileText, labelKey: 'nav.reports' },
+      { to: '/analytics', icon: Brain, labelKey: 'nav.analytics' },
     ],
   },
 ]
 
-const COMING_SOON_MODULES = [
-  { icon: FlaskConical, label: 'Recherche' },
-  { icon: Handshake, label: 'Partenariats' },
-  { icon: HeartPulse, label: 'Vie Étudiante' },
-  { icon: HardHat, label: 'Infrastructure' },
-  { icon: Cpu, label: 'Équipements' },
-  { icon: Package, label: 'Inventaire' },
-  { icon: BookOpen, label: 'Formation Continue' },
-  { icon: Leaf, label: 'ESG / RSE' },
-  { icon: Target, label: 'Stratégie' },
-  { icon: Truck, label: 'Logistique' },
-  { icon: GraduationCap, label: 'Pédagogie' },
-  { icon: ClipboardList, label: 'Scolarité' },
+const COMING_SOON = [
+  { icon: FlaskConical, labelKey: 'mod.research' },
+  { icon: Handshake, labelKey: 'mod.partnerships' },
+  { icon: HeartPulse, labelKey: 'mod.student' },
+  { icon: HardHat, labelKey: 'mod.infra' },
+  { icon: Cpu, labelKey: 'mod.equipment' },
+  { icon: Package, labelKey: 'mod.inventory' },
+  { icon: BookOpen, labelKey: 'mod.training' },
+  { icon: Leaf, labelKey: 'mod.esg' },
+  { icon: Target, labelKey: 'mod.strategy' },
+  { icon: Truck, labelKey: 'mod.logistics' },
+  { icon: GraduationCap, labelKey: 'mod.pedagogy' },
+  { icon: ClipboardList, labelKey: 'mod.scolarite' },
 ]
 
 export default function Sidebar() {
   const navigate = useNavigate()
+  const { t, isRTL } = useLang()
   const user = (() => {
     try { return JSON.parse(localStorage.getItem('ucar_user') || '{}') } catch { return {} }
   })()
@@ -73,8 +78,16 @@ export default function Sidebar() {
     navigate('/login')
   }
 
+  const sideStyle = {
+    ...styles.sidebar,
+    left: isRTL ? 'auto' : 0,
+    right: isRTL ? 0 : 'auto',
+  }
+
+  const ChevronEnd = isRTL ? ChevronLeft : ChevronRight
+
   return (
-    <aside style={styles.sidebar}>
+    <aside style={sideStyle}>
       {/* Logo */}
       <div style={styles.logo}>
         <div style={styles.logoIcon}>
@@ -94,8 +107,8 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav style={styles.nav}>
         {NAV.map((group) => (
-          <div key={group.section} style={styles.navGroup}>
-            <div style={styles.navSection}>{group.section}</div>
+          <div key={group.sectionKey} style={styles.navGroup}>
+            <div style={styles.navSection}>{t(group.sectionKey)}</div>
             {group.items.map((item) => (
               <NavLink
                 key={item.to}
@@ -108,8 +121,8 @@ export default function Sidebar() {
                 {({ isActive }) => (
                   <>
                     <item.icon size={17} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }} />
-                    <span style={styles.navLabel}>{item.label}</span>
-                    {isActive && <ChevronRight size={14} style={{ marginLeft: 'auto', opacity: 0.6 }} />}
+                    <span style={styles.navLabel}>{t(item.labelKey)}</span>
+                    {isActive && <ChevronEnd size={14} style={{ marginInlineStart: 'auto', opacity: 0.6 }} />}
                   </>
                 )}
               </NavLink>
@@ -117,28 +130,27 @@ export default function Sidebar() {
           </div>
         ))}
 
-        {/* Coming soon modules */}
+        {/* Coming soon */}
         <div style={styles.navGroup}>
-          <div style={styles.navSection}>Modules à venir</div>
-          {COMING_SOON_MODULES.map((mod) => (
-            <div key={mod.label} style={styles.lockedItem}>
+          <div style={styles.navSection}>{t('nav.coming')}</div>
+          {COMING_SOON.map((mod) => (
+            <div key={mod.labelKey} style={styles.lockedItem}>
               <mod.icon size={15} style={{ flexShrink: 0, opacity: 0.35 }} />
-              <span style={styles.lockedLabel}>{mod.label}</span>
-              <Lock size={11} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+              <span style={styles.lockedLabel}>{t(mod.labelKey)}</span>
+              <Lock size={11} style={{ marginInlineStart: 'auto', opacity: 0.3 }} />
             </div>
           ))}
         </div>
       </nav>
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
 
       {/* AI Tag */}
       <div style={styles.aiTag}>
         <TrendingUp size={15} />
         <div>
-          <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>Moteur IA actif</div>
-          <div style={{ fontSize: '0.7rem', opacity: 0.65 }}>Claude Sonnet · Prédictif</div>
+          <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('sidebar.ai')}</div>
+          <div style={{ fontSize: '0.7rem', opacity: 0.65 }}>{t('sidebar.ai.sub')}</div>
         </div>
       </div>
 
@@ -150,10 +162,10 @@ export default function Sidebar() {
           {(user.full_name || 'U').charAt(0).toUpperCase()}
         </div>
         <div style={styles.userInfo}>
-          <div style={styles.userName}>{user.full_name || 'Utilisateur'}</div>
-          <div style={styles.userRole}>{roleLabel(user.role)}</div>
+          <div style={styles.userName}>{user.full_name || t('role.unknown')}</div>
+          <div style={styles.userRole}>{roleLabel(user.role, t)}</div>
         </div>
-        <button style={styles.logoutBtn} onClick={handleLogout} title="Déconnexion">
+        <button style={styles.logoutBtn} onClick={handleLogout} title={t('sidebar.logout')}>
           <LogOut size={15} />
         </button>
       </div>
@@ -161,13 +173,13 @@ export default function Sidebar() {
   )
 }
 
-function roleLabel(role) {
+function roleLabel(role, t) {
   const map = {
-    presidency: 'Présidence UCAR',
-    institution_admin: 'Admin Institution',
-    viewer: 'Observateur',
+    presidency: 'role.presidency',
+    institution_admin: 'role.institution_admin',
+    viewer: 'role.viewer',
   }
-  return map[role] || role || 'Inconnu'
+  return map[role] ? t(map[role]) : (role || t('role.unknown'))
 }
 
 const styles = {
@@ -175,7 +187,7 @@ const styles = {
     width: '240px',
     height: '100vh',
     position: 'fixed',
-    top: 0, left: 0,
+    top: 0,
     background: 'rgb(20, 58, 105)',
     display: 'flex',
     flexDirection: 'column',

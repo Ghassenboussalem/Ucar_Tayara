@@ -3,15 +3,24 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import TopBar from './TopBar'
 import AIChatDrawer from './AIChatDrawer'
+import AlertToastLayer from './AlertToastLayer'
+import { useLang } from '../contexts/LangContext'
 
 export default function Layout() {
   const [chatOpen, setChatOpen] = useState(false)
+  const { isRTL } = useLang()
+
+  const mainStyle = {
+    ...styles.main,
+    marginLeft: isRTL ? 0 : '240px',
+    marginRight: isRTL ? '240px' : 0,
+  }
 
   return (
     <div style={styles.shell}>
       <Sidebar />
 
-      <div style={styles.main}>
+      <div style={mainStyle}>
         <TopBar onOpenChat={() => setChatOpen(true)} />
 
         <div style={styles.content}>
@@ -20,8 +29,8 @@ export default function Layout() {
       </div>
 
       <AIChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} />
+      <AlertToastLayer />
 
-      {/* Overlay backdrop */}
       {chatOpen && (
         <div style={styles.backdrop} onClick={() => setChatOpen(false)} />
       )}
@@ -37,7 +46,6 @@ const styles = {
   },
   main: {
     flex: 1,
-    marginLeft: '240px',
     display: 'flex',
     flexDirection: 'column',
     minHeight: '100vh',

@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Send, Sparkles, RotateCcw, ChevronRight, Database, FileText, BarChart2, Bell, Building2, LayoutDashboard, Wrench } from 'lucide-react'
 import { sendChat, ingestPdfs } from '../api/client'
+import { useLang } from '../contexts/LangContext'
 
-const SUGGESTED = [
+const SUGGESTED_FR = [
   "Quelles institutions ont des alertes critiques en ce moment ?",
   "Compare les taux de réussite de toutes les institutions et dis-moi qui est en tête",
   "Prévis le taux d'abandon du réseau pour S2 2026 avec Prophet",
@@ -11,6 +12,22 @@ const SUGGESTED = [
   "Donne-moi un diagnostic stratégique de l'INSAT avec recommandations",
   "Quelle institution a le pire absentéisme RH et pourquoi c'est risqué ?",
 ]
+
+const SUGGESTED_AR = [
+  'ما هي المؤسسات التي لديها تنبيهات حرجة الآن؟',
+  'قارن معدلات النجاح بين المؤسسات واذكر المؤسسة الأولى',
+  'توقع معدل الانقطاع للشبكة في س2 2026 باستخدام Prophet',
+  'ما هي اللوائح الخاصة بالامتحانات والتدارك؟',
+  'أعطني تشخيصا استراتيجيا لمؤسسة INSAT مع توصيات',
+  'ما هي المؤسسة ذات أعلى غياب للموارد البشرية ولماذا هذا خطر؟',
+]
+
+function assistantGreeting(lang) {
+  if (lang === 'ar') {
+    return 'مرحبا! أنا UCAR Intelligence، مساعدك الذكي مع وصول شامل إلى بيانات ووثائق الشبكة.\n\nيمكنني تحليل مؤشرات كل مؤسسة، مراجعة التنبيهات، البحث في الوثائق التنظيمية، وإرشادك إلى الصفحات المناسبة.'
+  }
+  return "Bonjour ! Je suis UCAR Intelligence — votre assistant IA avec accès complet aux données et documents du réseau.\n\nJe peux interroger les KPIs de chaque institution, analyser les alertes, chercher dans les textes réglementaires et vous guider vers les bonnes pages."
+}
 
 const PAGE_ICONS = {
   dashboard: LayoutDashboard,
@@ -22,34 +39,36 @@ const PAGE_ICONS = {
 }
 
 const TOOL_LABELS = {
-  search_knowledge_base: { label: 'Base documentaire', icon: FileText },
-  get_institutions_list: { label: 'Liste des institutions', icon: Building2 },
-  get_institution_kpis: { label: 'KPIs institution', icon: BarChart2 },
-  get_alerts: { label: 'Alertes', icon: Bell },
-  get_network_stats: { label: 'Stats réseau', icon: Database },
-  navigate_to_page: { label: 'Navigation', icon: ChevronRight },
+  search_knowledge_base: { fr: 'Base documentaire', ar: 'قاعدة الوثائق', icon: FileText },
+  get_institutions_list: { fr: 'Liste des institutions', ar: 'قائمة المؤسسات', icon: Building2 },
+  get_institution_kpis: { fr: 'KPIs institution', ar: 'مؤشرات المؤسسة', icon: BarChart2 },
+  get_alerts: { fr: 'Alertes', ar: 'التنبيهات', icon: Bell },
+  get_network_stats: { fr: 'Stats réseau', ar: 'إحصاءات الشبكة', icon: Database },
+  navigate_to_page: { fr: 'Navigation', ar: 'التنقل', icon: ChevronRight },
 }
 
 const AGENT_META = {
-  AlertInvestigatorAgent: { label: 'Investigateur Alertes', color: '#dc2626' },
-  ForecastAgent:          { label: 'Prévisions', color: '#7c3aed' },
-  BenchmarkAgent:         { label: 'Benchmark', color: '#0891b2' },
-  StrategicAdvisorAgent:  { label: 'Conseiller Stratégique', color: '#059669' },
-  ToolUseAgent:           { label: 'Agent Données', color: 'rgb(29,83,148)' },
+  AlertInvestigatorAgent: { fr: 'Investigateur Alertes', ar: 'محلل التنبيهات', color: '#dc2626' },
+  ForecastAgent:          { fr: 'Prévisions', ar: 'التوقعات', color: '#7c3aed' },
+  BenchmarkAgent:         { fr: 'Benchmark', ar: 'المقارنة المرجعية', color: '#0891b2' },
+  StrategicAdvisorAgent:  { fr: 'Conseiller Stratégique', ar: 'مستشار استراتيجي', color: '#059669' },
+  ToolUseAgent:           { fr: 'Agent Données', ar: 'وكيل البيانات', color: 'rgb(29,83,148)' },
 }
 
-function ToolBadge({ tool }) {
-  const meta = TOOL_LABELS[tool] || { label: tool, icon: Wrench }
+function ToolBadge({ tool, lang }) {
+  const meta = TOOL_LABELS[tool] || { fr: tool, ar: tool, icon: Wrench }
   const Icon = meta.icon
+  const label = lang === 'ar' ? (meta.ar || meta.fr) : meta.fr
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', padding: '2px 7px', borderRadius: '99px', background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)', fontSize: '0.68rem', fontWeight: 600 }}>
       <Icon size={10} />
-      {meta.label}
+      {label}
     </span>
   )
 }
 
-function NavButton({ navigation, onClick }) {
+function NavButton({ navigation, onClick, goLabel, lang }) {
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   if (!navigation) return null
   const Icon = PAGE_ICONS[navigation.page] || ChevronRight
   return (
@@ -62,16 +81,23 @@ function NavButton({ navigation, onClick }) {
         style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', background: 'rgb(29,83,148)', color: 'white', border: 'none', borderRadius: '7px', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif' }}
       >
         <Icon size={13} />
-        Aller à la page
+        {goLabel || tx('Aller à la page', 'الانتقال إلى الصفحة')}
         <ChevronRight size={12} />
       </button>
     </div>
   )
 }
 
-function Message({ msg, onNavigate }) {
+function Message({ msg, onNavigate, lang }) {
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const isUser = msg.role === 'user'
-  const agentMeta = !isUser && msg.agent_used ? (AGENT_META[msg.agent_used] || { label: msg.agent_used, color: '#64748b' }) : null
+  const agentMeta = !isUser && msg.agent_used
+    ? (() => {
+        const raw = AGENT_META[msg.agent_used]
+        if (!raw) return { label: msg.agent_used, color: '#64748b' }
+        return { label: lang === 'ar' ? (raw.ar || raw.fr) : raw.fr, color: raw.color }
+      })()
+    : null
 
   return (
     <div style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', alignItems: 'flex-start', gap: '8px' }}>
@@ -92,7 +118,7 @@ function Message({ msg, onNavigate }) {
         {/* Tool activity row */}
         {!isUser && msg.actions && msg.actions.length > 0 && (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {msg.actions.map((t, i) => <ToolBadge key={i} tool={t} />)}
+            {msg.actions.map((t, i) => <ToolBadge key={i} tool={t} lang={lang} />)}
           </div>
         )}
 
@@ -113,7 +139,7 @@ function Message({ msg, onNavigate }) {
           {msg.loading
             ? <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94a3b8' }}>
                 <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⚙️</span>
-                Analyse en cours…
+                {tx('Analyse en cours…', 'جار التحليل...')}
               </span>
             : msg.blocked
               ? `🛡️ ${msg.content}`
@@ -122,7 +148,7 @@ function Message({ msg, onNavigate }) {
 
         {/* Navigation button */}
         {!isUser && msg.navigation && (
-          <NavButton navigation={msg.navigation} onClick={() => onNavigate(msg.navigation.route)} />
+          <NavButton navigation={msg.navigation} onClick={() => onNavigate(msg.navigation.route)} goLabel={tx('Aller à la page', 'الانتقال إلى الصفحة')} lang={lang} />
         )}
       </div>
     </div>
@@ -130,11 +156,13 @@ function Message({ msg, onNavigate }) {
 }
 
 export default function AIChatDrawer({ open, onClose }) {
+  const { lang } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: "Bonjour ! Je suis UCAR Intelligence — votre assistant IA avec accès complet aux données et documents du réseau.\n\nJe peux interroger les KPIs de chaque institution, analyser les alertes, chercher dans les textes réglementaires et vous guider vers les bonnes pages.",
+      content: assistantGreeting(lang),
     },
   ])
   const [input, setInput] = useState('')
@@ -187,7 +215,7 @@ export default function AIChatDrawer({ open, onClose }) {
         const copy = [...prev]
         copy[copy.length - 1] = {
           role: 'assistant',
-          content: 'Erreur de connexion. Vérifiez que le backend est actif.',
+          content: tx('Erreur de connexion. Vérifiez que le backend est actif.', 'خطأ في الاتصال. تحقق من أن الخادم الخلفي يعمل.'),
         }
         return copy
       })
@@ -203,13 +231,17 @@ export default function AIChatDrawer({ open, onClose }) {
       let content
       if (res.errors?.length && res.ingested === 0 && res.total_docs === 0) {
         // RAG deps missing or directory empty
-        content = `⚠️ Base documentaire indisponible\n${res.message || ''}\n${res.errors.join('\n')}\n\nPour activer le RAG :\n  pip install chromadb sentence-transformers pypdf\nPuis déposez vos PDFs dans D:\\Ucar_dataset\\rag_dataset\\`
+        content = lang === 'ar'
+          ? `⚠️ قاعدة الوثائق غير متاحة\n${res.message || ''}\n${res.errors.join('\n')}\n\nلتفعيل RAG:\n  pip install chromadb sentence-transformers pypdf\nثم ضع ملفات PDF في D:\\Ucar_dataset\\rag_dataset\\`
+          : `⚠️ Base documentaire indisponible\n${res.message || ''}\n${res.errors.join('\n')}\n\nPour activer le RAG :\n  pip install chromadb sentence-transformers pypdf\nPuis déposez vos PDFs dans D:\\Ucar_dataset\\rag_dataset\\`
       } else {
-        content = `Base documentaire mise à jour ✅\n- ${res.ingested} nouveaux fragments indexés\n- ${res.skipped} déjà présents\n- ${res.total_docs} fragments au total${res.errors?.length ? `\n⚠️ Fichiers ignorés: ${res.errors.join(', ')}` : ''}`
+        content = lang === 'ar'
+          ? `تم تحديث قاعدة الوثائق ✅\n- ${res.ingested} مقاطع جديدة مفهرسة\n- ${res.skipped} موجودة مسبقا\n- ${res.total_docs} مقطعا إجمالا${res.errors?.length ? `\n⚠️ ملفات تم تجاهلها: ${res.errors.join(', ')}` : ''}`
+          : `Base documentaire mise à jour ✅\n- ${res.ingested} nouveaux fragments indexés\n- ${res.skipped} déjà présents\n- ${res.total_docs} fragments au total${res.errors?.length ? `\n⚠️ Fichiers ignorés: ${res.errors.join(', ')}` : ''}`
       }
       setMessages((prev) => [...prev, { role: 'assistant', content }])
     } catch {
-      setMessages((prev) => [...prev, { role: 'assistant', content: "Erreur de connexion au backend. Vérifiez que le serveur est actif." }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: tx('Erreur de connexion au backend. Vérifiez que le serveur est actif.', 'خطأ في الاتصال بالخادم الخلفي. تحقق من أن الخادم يعمل.') }])
     } finally {
       setIngesting(false)
     }
@@ -218,7 +250,7 @@ export default function AIChatDrawer({ open, onClose }) {
   function handleReset() {
     setMessages([{
       role: 'assistant',
-      content: "Conversation réinitialisée. Comment puis-je vous aider ?",
+      content: tx('Conversation réinitialisée. Comment puis-je vous aider ?', 'تمت إعادة ضبط المحادثة. كيف يمكنني مساعدتك؟'),
     }])
   }
 
@@ -228,6 +260,7 @@ export default function AIChatDrawer({ open, onClose }) {
   }
 
   const showSuggested = messages.length <= 1
+  const suggested = lang === 'ar' ? SUGGESTED_AR : SUGGESTED_FR
 
   return (
     <>
@@ -257,20 +290,20 @@ export default function AIChatDrawer({ open, onClose }) {
             <div>
               <div style={{ color: 'white', fontWeight: 700, fontSize: '0.88rem' }}>UCAR Intelligence IA</div>
               <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '0.68rem', marginTop: '1px' }}>
-                Agent · RAG · Base de données
+                {tx('Agent · RAG · Base de données', 'وكيل · RAG · قاعدة البيانات')}
               </div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '6px' }}>
             <button
-              title="Indexer les PDFs"
+              title={tx('Indexer les PDFs', 'فهرسة ملفات PDF')}
               onClick={handleIngestPdfs}
               disabled={ingesting}
               style={{ ...S.iconBtn, opacity: ingesting ? 0.5 : 1 }}
             >
               <Database size={13} />
             </button>
-            <button title="Réinitialiser" onClick={handleReset} style={S.iconBtn}>
+            <button title={tx('Réinitialiser', 'إعادة التعيين')} onClick={handleReset} style={S.iconBtn}>
               <RotateCcw size={13} />
             </button>
             <button onClick={onClose} style={S.iconBtn}>
@@ -283,10 +316,10 @@ export default function AIChatDrawer({ open, onClose }) {
         {showSuggested && (
           <div style={{ padding: '12px 14px 0', flexShrink: 0 }}>
             <p style={{ fontSize: '0.68rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '8px' }}>
-              Suggestions
+              {tx('Suggestions', 'اقتراحات')}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-              {SUGGESTED.map((s) => (
+              {suggested.map((s) => (
                 <button key={s} style={S.chip} onClick={() => handleSend(s)}>{s}</button>
               ))}
             </div>
@@ -296,7 +329,7 @@ export default function AIChatDrawer({ open, onClose }) {
         {/* Messages */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
           {messages.map((msg, i) => (
-            <Message key={i} msg={msg} onNavigate={handleNavigate} />
+            <Message key={i} msg={msg} onNavigate={handleNavigate} lang={lang} />
           ))}
           <div ref={bottomRef} />
         </div>
@@ -306,7 +339,7 @@ export default function AIChatDrawer({ open, onClose }) {
           <textarea
             ref={inputRef}
             style={{ ...S.chatInput, resize: 'none', minHeight: '38px', maxHeight: '100px', overflowY: 'auto' }}
-            placeholder="Posez votre question…"
+            placeholder={tx('Posez votre question…', 'اكتب سؤالك...')}
             value={input}
             rows={1}
             onChange={(e) => {
