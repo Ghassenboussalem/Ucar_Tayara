@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { forceSimulation, forceLink, forceManyBody, forceCenter, forceCollide } from 'd3-force'
 import {
   Upload, Database, CheckCircle2, AlertTriangle, Cpu, FileText,
   Play, Wifi, WifiOff, RefreshCw, ChevronRight, X, Folder,
@@ -136,6 +137,23 @@ export default function DataIngestionPage() {
     try {
       const list = await etlListJobs(15)
       setJobs(list)
+      setEtlOnline(true)
+      // Rebuild recentRows from the API so navigation doesn't wipe the graph
+      setRecentRows(
+        list
+          .filter(j => j.status === 'stored' || j.status === 'failed')
+          .slice(0, 12)
+          .map(j => ({
+            id: j.id,
+            institution: j.institution,
+            domain: DOMAIN_LABELS[j.document_type] || j.document_type,
+            records: j.records_count > 0 ? j.records_count : '—',
+            status: j.status,
+            ts: j.updated_at
+              ? new Date(j.updated_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+              : '—',
+          }))
+      )
     } catch { setEtlOnline(false) }
   }
 
@@ -734,6 +752,229 @@ function PipelineViz({ stage, job, batchTotal = 0, batchDone = 0 }) {
   )
 }
 
+// ── Domain colour palette ──────────────────────────────────────────────────────
+const DOMAIN_COLORS = {
+  'Académique':         '#2563eb',
+  'Finance':            '#059669',
+  'Ressources Humaines':'#7c3aed',
+  'ESG / Env.':         '#16a34a',
+  'Recherche':          '#0891b2',
+  'Employabilité':      '#d97706',
+  'Infrastructure':     '#dc2626',
+  'Partenariats':       '#9333ea',
+}
+function domainColor(domain) { return DOMAIN_COLORS[domain] || 'rgb(29,83,148)' }
+
+// ── Force-directed network graph ───────────────────────────────────────────────
+function NetworkGraph({ rows, newRowId }) {
+  const svgRef = useRef(null)
+  const [tooltip, setTooltip] = useState(null)   // { x, y, node }
+  const [positions, setPositions] = useState([]) // [{ id, x, y }]
+  const W = 420, H = 260
+
+  // Build nodes + links from rows
+  const { nodes, links } = useMemo(() => {
+    const institutionSet = {}
+    rows.forEach(r => { institutionSet[r.institution] = true })
+
+    const instNodes = Object.keys(institutionSet).map(code => ({
+      id: `inst_${code}`, type: 'institution', label: code,
+      r: 22, color: 'rgb(29,83,148)', textColor: 'white',
+    }))
+
+    const fileNodes = rows.map(r => ({
+      id: r.id,
+      type: 'file',
+      label: r.domain,
+      institution: r.institution,
+      records: r.records,
+      status: r.status,
+      ts: r.ts,
+      isNew: r.id === newRowId,
+      r: Math.max(10, Math.min(18, typeof r.records === 'number' ? 8 + r.records * 0.15 : 10)),
+      color: r.status === 'stored' ? domainColor(r.domain) : '#ef4444',
+      textColor: 'white',
+    }))
+
+    const links = rows.map(r => ({
+      source: `inst_${r.institution}`,
+      target: r.id,
+    }))
+
+    return { nodes: [...instNodes, ...fileNodes], links }
+  }, [rows, newRowId])
+
+  // Run D3 force simulation, capture final positions
+  useEffect(() => {
+    if (!nodes.length) return
+    const sim = forceSimulation(nodes.map(n => ({ ...n })))
+      .force('link', forceLink(links.map(l => ({ ...l }))).id(d => d.id).distance(70).strength(1))
+      .force('charge', forceManyBody().strength(-160))
+      .force('center', forceCenter(W / 2, H / 2))
+      .force('collide', forceCollide(d => d.r + 8))
+      .stop()
+
+    // Run synchronously for 300 ticks then snapshot
+    for (let i = 0; i < 300; i++) sim.tick()
+    setPositions(sim.nodes().map(n => ({
+      id: n.id, x: Math.max(n.r + 4, Math.min(W - n.r - 4, n.x)),
+      y: Math.max(n.r + 4, Math.min(H - n.r - 4, n.y)),
+    })))
+  }, [nodes.length, links.length])
+
+  const posMap = useMemo(() => {
+    const m = {}
+    positions.forEach(p => { m[p.id] = p })
+    return m
+  }, [positions])
+
+  if (!rows.length) return null
+
+  return (
+    <div style={{ position: 'relative', marginTop: '12px' }}>
+      <div style={{ fontSize: '0.68rem', color: '#94a3b8', marginBottom: '6px', fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase' }}>
+        Graphe de connexion — données en direct
+      </div>
+      <svg ref={svgRef} width="100%" viewBox={`0 0 ${W} ${H}`}
+        style={{ background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'visible' }}>
+
+        {/* Links */}
+        {links.map((l, i) => {
+          const s = posMap[l.source], t = posMap[l.target]
+          if (!s || !t) return null
+          const fileNode = nodes.find(n => n.id === l.target)
+          const isNew = fileNode?.isNew
+          return (
+            <line key={i} x1={s.x} y1={s.y} x2={t.x} y2={t.y}
+              stroke={isNew ? '#86efac' : '#cbd5e1'}
+              strokeWidth={isNew ? 2 : 1.2}
+              strokeDasharray={isNew ? 'none' : '5 3'}
+              style={{ transition: 'stroke 0.5s' }}
+            />
+          )
+        })}
+
+        {/* Nodes */}
+        {nodes.map(node => {
+          const pos = posMap[node.id]
+          if (!pos) return null
+          const isInst = node.type === 'institution'
+          const isNew = node.isNew
+          const isHovered = tooltip?.node?.id === node.id
+          return (
+            <g key={node.id}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={e => {
+                const rect = svgRef.current?.getBoundingClientRect()
+                if (rect) setTooltip({ x: e.clientX - rect.left, y: e.clientY - rect.top, node })
+              }}
+              onMouseLeave={() => setTooltip(null)}
+            >
+              {/* Glow ring for new nodes */}
+              {isNew && (
+                <circle cx={pos.x} cy={pos.y} r={node.r + 6}
+                  fill="none" stroke="#22c55e" strokeWidth="2" opacity="0.5"
+                  style={{ animation: 'ingestGlow 1.5s ease infinite' }}
+                />
+              )}
+              {/* Hover ring */}
+              {isHovered && (
+                <circle cx={pos.x} cy={pos.y} r={node.r + 5}
+                  fill="none" stroke={node.color} strokeWidth="2" opacity="0.35"
+                />
+              )}
+              <circle cx={pos.x} cy={pos.y} r={isHovered ? node.r + 2 : node.r}
+                fill={node.color}
+                opacity={isHovered ? 1 : isInst ? 1 : 0.85}
+                style={{ transition: 'r 0.15s, opacity 0.15s', filter: isHovered ? `drop-shadow(0 0 6px ${node.color}80)` : 'none' }}
+              />
+              {/* Label */}
+              <text x={pos.x} y={pos.y + (isInst ? 5 : 4)} textAnchor="middle"
+                fontSize={isInst ? 10 : 8} fontWeight={isInst ? 800 : 600}
+                fill={node.textColor} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                {isInst ? node.label : node.label.split(' ')[0]}
+              </text>
+              {/* Records count for file nodes */}
+              {!isInst && typeof node.records === 'number' && (
+                <text x={pos.x} y={pos.y + node.r + 11} textAnchor="middle"
+                  fontSize={7} fill="#64748b" style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                  {node.records} enr.
+                </text>
+              )}
+            </g>
+          )
+        })}
+      </svg>
+
+      {/* Floating tooltip */}
+      {tooltip && (
+        <div style={{
+          position: 'absolute',
+          left: Math.min(tooltip.x + 12, W - 180),
+          top: tooltip.y - 10,
+          background: 'white',
+          border: `1.5px solid ${tooltip.node.color}50`,
+          borderRadius: '10px',
+          padding: '10px 14px',
+          boxShadow: `0 8px 24px ${tooltip.node.color}25`,
+          fontSize: '0.72rem',
+          minWidth: '170px',
+          zIndex: 60,
+          pointerEvents: 'none',
+          animation: 'ingestFadeUp 0.12s ease both',
+        }}>
+          {tooltip.node.type === 'institution' ? (
+            <>
+              <div style={{ fontWeight: 800, color: 'rgb(29,83,148)', fontSize: '0.82rem', marginBottom: '4px' }}>
+                🏛 {tooltip.node.label}
+              </div>
+              <div style={{ color: '#64748b' }}>
+                {rows.filter(r => r.institution === tooltip.node.label).length} fichier(s) ingéré(s)
+              </div>
+              <div style={{ color: '#64748b', marginTop: '2px' }}>
+                {rows.filter(r => r.institution === tooltip.node.label && r.status === 'stored').length} chargé(s) ·{' '}
+                {rows.filter(r => r.institution === tooltip.node.label && r.status === 'failed').length} erreur(s)
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: tooltip.node.color, flexShrink: 0 }} />
+                <strong style={{ color: '#0f172a' }}>{tooltip.node.label}</strong>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '3px 10px', color: '#64748b' }}>
+                <span>Institution</span><strong style={{ color: '#0f172a' }}>{tooltip.node.institution}</strong>
+                <span>Enreg.</span><strong style={{ color: tooltip.node.color }}>{typeof tooltip.node.records === 'number' ? tooltip.node.records : '—'}</strong>
+                <span>Statut</span>
+                <strong style={{ color: tooltip.node.status === 'stored' ? '#0ea5e9' : '#dc2626' }}>
+                  {tooltip.node.status === 'stored' ? 'Chargé ✓' : 'Erreur ✗'}
+                </strong>
+                <span>Heure</span><strong style={{ color: '#475569' }}>{tooltip.node.ts}</strong>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: '14px', marginTop: '8px', flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.67rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="rgb(29,83,148)" /></svg> Institution
+        </span>
+        <span style={{ fontSize: '0.67rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="#059669" /></svg> Chargé
+        </span>
+        <span style={{ fontSize: '0.67rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <svg width="10" height="10"><circle cx="5" cy="5" r="5" fill="#ef4444" /></svg> Erreur
+        </span>
+        <span style={{ fontSize: '0.67rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 2" /></svg> Connexion
+        </span>
+      </div>
+    </div>
+  )
+}
+
 // ── Live DB Feed ───────────────────────────────────────────────────────────────
 function LiveFeed({ rows, newRowId }) {
   return (
@@ -749,31 +990,40 @@ function LiveFeed({ rows, newRowId }) {
           </span>
         )}
       </div>
+
       {rows.length === 0 ? (
         <div style={{ padding: '24px 0', textAlign: 'center', color: '#94a3b8', fontSize: '0.8rem' }}>
           Aucune donnée chargée dans cette session.<br />
           <span style={{ fontSize: '0.72rem' }}>Les nouvelles entrées apparaîtront ici.</span>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '10px' }}>
-          {rows.map((row) => (
-            <div key={row.id} style={{
-              display: 'grid', gridTemplateColumns: '1fr 1fr auto auto auto',
-              gap: '8px', padding: '8px 10px', borderRadius: '8px', fontSize: '0.74rem',
-              alignItems: 'center',
-              animation: row.id === newRowId ? 'ingestRow 1.2s ease both' : 'none',
-              background: row.id === newRowId ? 'white' : '#fafafa',
-              border: `1px solid ${row.id === newRowId ? '#86efac' : '#f1f5f9'}`,
-              transition: 'border-color 0.5s ease',
-            }}>
-              <span style={{ fontWeight: 600, color: '#0f172a' }}>{row.institution}</span>
-              <span style={{ color: '#64748b' }}>{row.domain}</span>
-              <span style={{ color: '#94a3b8' }}>{row.records} enr.</span>
-              <StatusBadge status={row.status} />
-              <span style={{ color: '#cbd5e1', fontSize: '0.68rem' }}>{row.ts}</span>
-            </div>
-          ))}
-        </div>
+        <>
+          <NetworkGraph rows={rows} newRowId={newRowId} />
+          {/* Compact row list below the graph */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', marginTop: '10px' }}>
+            {rows.map((row) => {
+              const isNew = row.id === newRowId
+              const color = domainColor(row.domain)
+              return (
+                <div key={row.id} style={{
+                  display: 'grid', gridTemplateColumns: '8px 1fr 1fr auto auto',
+                  gap: '8px', padding: '6px 10px', borderRadius: '7px', fontSize: '0.72rem',
+                  alignItems: 'center',
+                  animation: isNew ? 'ingestRow 1.2s ease both' : 'none',
+                  background: isNew ? '#f0fdf4' : '#fafafa',
+                  border: `1px solid ${isNew ? '#86efac' : '#f1f5f9'}`,
+                  transition: 'border-color 0.5s',
+                }}>
+                  <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: color }} />
+                  <span style={{ fontWeight: 700, color: '#0f172a' }}>{row.institution}</span>
+                  <span style={{ color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.domain}</span>
+                  <StatusBadge status={row.status} />
+                  <span style={{ color: '#cbd5e1', fontSize: '0.65rem' }}>{row.ts}</span>
+                </div>
+              )
+            })}
+          </div>
+        </>
       )}
     </div>
   )

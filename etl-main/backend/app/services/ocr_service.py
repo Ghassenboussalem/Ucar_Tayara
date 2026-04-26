@@ -31,6 +31,8 @@ def _serialize_csv(rows: list[dict], headers: list[str]) -> str:
 
 
 def _heuristic_structured_csv(raw_text: str, document_type: str | None) -> str:
+    """Last-resort heuristic: turn raw OCR text into structured CSV.
+    Works for all 8 KPI domains. Used only when Groq is unavailable."""
     text = (raw_text or "").strip()
     if not text:
         return ""
@@ -40,12 +42,10 @@ def _heuristic_structured_csv(raw_text: str, document_type: str | None) -> str:
         return ""
 
     normalized_type = (document_type or "").lower().strip()
-    if normalized_type == "grades":
+
+    if normalized_type in ("grades", "academic"):
         rows = []
         for ln in lines:
-            # Example accepted forms:
-            # UCAR001 Math 14
-            # UCAR001;Math;14
             parts = re.split(r"[;,\t ]+", ln)
             if len(parts) < 3:
                 continue
@@ -54,16 +54,10 @@ def _heuristic_structured_csv(raw_text: str, document_type: str | None) -> str:
             subject = " ".join(parts[1:-1]) or "unknown"
             if grade_val is None:
                 continue
-            rows.append(
-                {
-                    "student_id": student_id,
-                    "subject": subject,
-                    "grade": grade_val,
-                }
-            )
+            rows.append({"student_id": student_id, "subject": subject, "grade": grade_val})
         return _serialize_csv(rows, ["student_id", "subject", "grade"])
 
-    if normalized_type == "budget":
+    if normalized_type in ("finance", "budget"):
         rows = []
         for ln in lines:
             parts = re.split(r"[;,\t ]+", ln)
@@ -74,16 +68,110 @@ def _heuristic_structured_csv(raw_text: str, document_type: str | None) -> str:
             spent = _safe_float(parts[-1])
             if allocated is None or spent is None:
                 continue
-            rows.append(
-                {
-                    "institution": institution,
-                    "allocated": allocated,
-                    "spent": spent,
-                }
-            )
+            rows.append({"institution": institution, "allocated": allocated, "spent": spent})
         return _serialize_csv(rows, ["institution", "allocated", "spent"])
 
-    # Generic fallback: preserve text and let parser fail gracefully if needed.
+    if normalized_type == "hr":
+        rows = []
+        for ln in lines:
+            parts = re.split(r"[;,\t ]+", ln)
+            if len(parts) < 2:
+                continue
+            staff_type = parts[0] if parts[0].lower() in ("teaching", "admin", "enseignant", "administratif") else "teaching"
+            headcount = _safe_float(parts[1]) if len(parts) > 1 else None
+            if headcount is None:
+                continue
+            rows.append({"staff_type": staff_type, "headcount": int(headcount)})
+        if rows:
+            return _serialize_csv(rows, ["staff_type", "headcount"])
+
+    if normalized_type == "esg":
+        # Try to extract key-value pairs from OCR text (e.g. "Énergie: 450000 kWh")
+        row: dict = {}
+        kv_patterns = [
+            (r"energie|energy|énergie", r"(\d[\d\s]*)", "energy_consumption_kwh"),
+            (r"carbone|co2|carbon", r"(\d[\d.,]*)", "carbon_footprint_tons"),
+            (r"recyclage|recycling", r"(\d[\d.,]*)", "recycling_rate"),
+            (r"accessibilit", r"(\d[\d.,]*)", "accessibility_score"),
+        ]
+        for ln in lines:
+            for kw, val_re, field in kv_patterns:
+                if re.search(kw, ln, re.IGNORECASE):
+                    m = re.search(val_re, ln)
+                    if m:
+                        row[field] = _safe_float(m.group(1).replace(" ", ""))
+        if row:
+            return _serialize_csv([row], list(row.keys()))
+
+    if normalized_type == "research":
+        row = {}
+        patterns = [
+            (r"publication", r"(\d+)", "publications_count"),
+            (r"projet|project", r"(\d+)", "active_projects"),
+            (r"doctorant|phd", r"(\d+)", "phd_students"),
+            (r"brevet|patent", r"(\d+)", "patents_filed"),
+        ]
+        for ln in lines:
+            for kw, val_re, field in patterns:
+                if re.search(kw, ln, re.IGNORECASE):
+                    m = re.search(val_re, ln)
+                    if m:
+                        row[field] = int(m.group(1))
+        if row:
+            return _serialize_csv([row], list(row.keys()))
+
+    if normalized_type == "employment":
+        row = {}
+        patterns = [
+            (r"diplom|graduat", r"(\d+)", "graduates_total"),
+            (r"6\s*mois|6months", r"(\d+)", "employed_within_6months"),
+            (r"12\s*mois|12months", r"(\d+)", "employed_within_12months"),
+        ]
+        for ln in lines:
+            for kw, val_re, field in patterns:
+                if re.search(kw, ln, re.IGNORECASE):
+                    m = re.search(val_re, ln)
+                    if m:
+                        row[field] = int(m.group(1))
+        if row:
+            return _serialize_csv([row], list(row.keys()))
+
+    if normalized_type == "infrastructure":
+        row = {}
+        patterns = [
+            (r"salle|classroom|amphi", r"(\d[\d.,]*)", "classroom_occupancy_rate"),
+            (r"labo|lab", r"(\d[\d.,]*)", "lab_availability_rate"),
+            (r"maintenance|entretien", r"(\d+)", "maintenance_requests"),
+            (r"r[eé]sol", r"(\d+)", "resolved_requests"),
+        ]
+        for ln in lines:
+            for kw, val_re, field in patterns:
+                if re.search(kw, ln, re.IGNORECASE):
+                    m = re.search(val_re, ln)
+                    if m:
+                        row[field] = _safe_float(m.group(1).replace(" ", ""))
+        if row:
+            return _serialize_csv([row], list(row.keys()))
+
+    if normalized_type == "partnership":
+        row = {}
+        patterns = [
+            (r"national|accord.nat", r"(\d+)", "active_national_agreements"),
+            (r"international|accord.int", r"(\d+)", "active_international_agreements"),
+            (r"entrant|incoming", r"(\d+)", "incoming_students"),
+            (r"sortant|outgoing", r"(\d+)", "outgoing_students"),
+            (r"erasmus", r"(\d+)", "erasmus_partnerships"),
+        ]
+        for ln in lines:
+            for kw, val_re, field in patterns:
+                if re.search(kw, ln, re.IGNORECASE):
+                    m = re.search(val_re, ln)
+                    if m:
+                        row[field] = int(m.group(1))
+        if row:
+            return _serialize_csv([row], list(row.keys()))
+
+    # Generic fallback: preserve raw text for the CSV parser to try
     return text
 
 
@@ -296,6 +384,7 @@ class CompositeOCRProvider(OCRProvider):
         is_image = filename.lower().endswith(self._IMAGE_EXTS)
 
         raw_text = ""
+        lower = filename.lower()
         for provider in self.providers:
             extracted = provider.extract_text(content, filename, document_type=document_type)
             if extracted.strip():
@@ -327,7 +416,7 @@ class CompositeOCRProvider(OCRProvider):
             elif raw_text:
                 try:
                     structured = self.groq_provider.extract_text(
-                        raw_text.encode("utf-8"), "normalized.txt", document_type=document_type
+                        raw_text.encode("utf-8"), "extracted_text.txt", document_type=document_type
                     )
                     if structured.strip():
                         return structured

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getInstitutions, getInstitutionScores } from '../api/client'
 import { Building2, ChevronRight, Search, Map } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
+import { useAuth } from '../contexts/AuthContext'
 
 function ScoreBadge({ score }) {
   if (score == null) return null
@@ -20,6 +21,7 @@ export default function InstitutionsPage() {
   const { lang } = useLang()
   const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
+  const { institutionId, isPresidency } = useAuth()
   const [institutions, setInstitutions] = useState([])
   const [scores, setScores] = useState({})
   const [loading, setLoading] = useState(true)
@@ -30,6 +32,11 @@ export default function InstitutionsPage() {
       getInstitutions(),
       getInstitutionScores().catch(() => []),
     ]).then(([insts, scoreList]) => {
+      // Non-presidency users go straight to their institution detail
+      if (!isPresidency && institutionId) {
+        navigate(`/institutions/${institutionId}`, { replace: true })
+        return
+      }
       setInstitutions(insts)
       const map = {}
       scoreList.forEach((s) => { map[s.id] = s })

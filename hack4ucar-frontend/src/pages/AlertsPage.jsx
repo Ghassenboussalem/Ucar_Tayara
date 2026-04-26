@@ -3,7 +3,7 @@ import { getAlerts, resolveAlert, explainAlert } from '../api/client'
 import { Bell, Filter, CheckCircle, Sparkles, RefreshCw } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 
-const DOMAIN_OPTIONS = ['all', 'academic', 'finance', 'hr']
+const DOMAIN_OPTIONS = ['all', 'academic', 'finance', 'hr', 'esg', 'employment', 'infrastructure']
 const SEVERITY_OPTIONS = ['all', 'critical', 'warning', 'info']
 
 export default function AlertsPage() {
@@ -51,6 +51,9 @@ export default function AlertsPage() {
     academic: t('domain.academic'),
     finance: t('domain.finance'),
     hr: t('domain.hr'),
+    esg: tx('ESG / Durabilité', 'البيئة والمجتمع'),
+    employment: tx('Employabilité', 'التوظيف'),
+    infrastructure: tx('Infrastructure', 'البنية التحتية'),
   }
 
   return (

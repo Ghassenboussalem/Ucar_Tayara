@@ -272,6 +272,8 @@ def list_jobs(
             processing_error=job.processing_error,
             extraction_quality=job.extraction_quality,
             anomalies_detected=len(job.anomalies),
+            records_count=len(job.extracted_payload) if job.extracted_payload else 0,
+            updated_at=job.updated_at.isoformat() if job.updated_at else None,
         )
         for job in jobs
     ]

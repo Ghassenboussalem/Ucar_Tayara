@@ -92,6 +92,8 @@ class JobSummary(BaseModel):
     processing_error: str | None
     extraction_quality: int
     anomalies_detected: int
+    records_count: int = 0
+    updated_at: str | None = None
 
 
 class JobDetail(JobSummary):

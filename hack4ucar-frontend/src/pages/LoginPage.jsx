@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../api/client'
 import { useLang } from '../contexts/LangContext'
+import { setSelectedInstitution } from '../utils/institutionFilter'
 
 export default function LoginPage() {
   const { lang, toggleLang } = useLang()
@@ -24,6 +25,8 @@ export default function LoginPage() {
         full_name: data.full_name,
         institution_id: data.institution_id,
       }))
+      window.dispatchEvent(new Event('ucar_user_change'))
+      setSelectedInstitution(null)
       navigate('/dashboard')
     } catch {
       setError(tx('Email ou mot de passe incorrect.', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'))
@@ -55,14 +58,14 @@ export default function LoginPage() {
             {tx('La plateforme de pilotage universitaire de demain.', 'منصة قيادة جامعية للغد.')}
           </h1>
           <p style={styles.heroSub}>
-            {tx('Centralisez, analysez et anticipez les données de vos 33 institutions en temps réel.', 'وحّد البيانات وحللها وتنبأ بمؤشرات 33 مؤسسة في الوقت الفعلي.')}
+            {tx('Centralisez, analysez et anticipez les données de 33 institutions — 30 000 étudiants, 3 000 personnels.', 'وحّد البيانات وحللها وتنبأ بمؤشرات 33 مؤسسة — 30,000 طالب و3,000 موظف.')}
           </p>
 
           <div style={styles.statGrid}>
             {[
               { value: '33', label: tx('Établissements', 'مؤسسة') },
-              { value: '85k+', label: tx('Étudiants suivis', 'طلاب متابعون') },
-              { value: 'IA', label: tx('Moteur prédictif', 'محرك تنبؤي') },
+              { value: '30k+', label: tx('Étudiants suivis', 'طلاب متابعون') },
+              { value: '3k+', label: tx('Personnel', 'موظف') },
             ].map((s) => (
               <div key={s.label} style={styles.statCard}>
                 <span style={styles.statValue}>{s.value}</span>
@@ -153,9 +156,12 @@ export default function LoginPage() {
           <div style={styles.demoHint}>
             <p style={{ color: '#64748b', fontSize: '0.78rem', marginBottom: '6px', fontWeight: 600 }}>{tx('Comptes de démo :', 'حسابات تجريبية:')}</p>
             {[
-              { email: 'president@ucar.rnu.tn', role: tx('Président (vue globale)', 'رئيس الجامعة (رؤية شاملة)') },
-              { email: 'admin.fsegn@ucar.rnu.tn', role: tx('Admin FSEG Nabeul', 'مدير FSEG نابل') },
-              { email: 'admin.enstab@ucar.rnu.tn', role: tx('Admin ENSTAB', 'مدير ENSTAB') },
+              { email: 'president@ucar.rnu.tn',    role: tx('👑 Présidence UCAR', '👑 رئاسة UCAR') },
+              { email: 'admin.fsegn@ucar.rnu.tn',  role: tx('🏛 Directeur FSEGN', '🏛 مدير FSEGN') },
+              { email: 'admin.enstab@ucar.rnu.tn', role: tx('🏛 Directeur ENSTAB', '🏛 مدير ENSTAB') },
+              { email: 'admin.essths@ucar.rnu.tn', role: tx('🏛 Directeur ESSTHS', '🏛 مدير ESSTHS') },
+              { email: 'viewer.ihec@ucar.rnu.tn',  role: tx('👁 Observateur IHEC', '👁 مراقب IHEC') },
+              { email: 'viewer.supcom@ucar.rnu.tn',role: tx('👁 Observateur SUPCOM', '👁 مراقب SUPCOM') },
             ].map((u) => (
               <button
                 key={u.email}

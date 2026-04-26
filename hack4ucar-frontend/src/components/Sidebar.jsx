@@ -15,7 +15,9 @@ import {
   DatabaseZap,
 } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
+import { useAuth } from '../contexts/AuthContext'
 
+// roles: which roles can see this item (undefined = all)
 const NAV = [
   {
     sectionKey: 'nav.overview',
@@ -35,24 +37,28 @@ const NAV = [
     sectionKey: 'nav.intelligence',
     items: [
       { to: '/reports', icon: FileText, labelKey: 'nav.reports' },
-      { to: '/causal', icon: Network, labelKey: 'nav.causal' },
-      { to: '/analytics', icon: Brain, labelKey: 'nav.analytics' },
-      { to: '/ingestion', icon: Database, labelKey: 'nav.ingestion' },
+      { to: '/causal', icon: Network, labelKey: 'nav.causal', roles: ['presidency'] },
+      { to: '/analytics', icon: Brain, labelKey: 'nav.analytics', roles: ['presidency'] },
+      { to: '/ingestion', icon: DatabaseZap, labelKey: 'nav.ingestion', roles: ['presidency', 'institution_admin'] },
     ],
   },
 ]
 
+const ROLE_META = {
+  presidency:        { label: 'Présidence UCAR', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+  institution_admin: { label: 'Directeur',        color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
+  viewer:            { label: 'Observateur',       color: '#86efac', bg: 'rgba(134,239,172,0.15)' },
+}
 
 export default function Sidebar() {
   const navigate = useNavigate()
   const { t, isRTL } = useLang()
-  const user = (() => {
-    try { return JSON.parse(localStorage.getItem('ucar_user') || '{}') } catch { return {} }
-  })()
+  const { user, role, can } = useAuth()
 
   function handleLogout() {
     localStorage.removeItem('ucar_token')
     localStorage.removeItem('ucar_user')
+    window.dispatchEvent(new Event('ucar_user_change'))
     navigate('/login')
   }
 
@@ -88,30 +94,35 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav style={styles.nav}>
-        {NAV.map((group) => (
-          <div key={group.sectionKey} style={styles.navGroup}>
-            <div style={styles.navSection}>{t(group.sectionKey)}</div>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                style={({ isActive }) => ({
-                  ...styles.navItem,
-                  ...(isActive ? styles.navItemActive : {}),
-                })}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon size={17} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }} />
-                    <span style={styles.navLabel}>{t(item.labelKey)}</span>
-                    {isActive && <ChevronEnd size={14} style={{ marginInlineStart: 'auto', opacity: 0.6 }} />}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-
+        {NAV.map((group) => {
+          const visibleItems = group.items.filter(
+            item => !item.roles || item.roles.includes(role)
+          )
+          if (!visibleItems.length) return null
+          return (
+            <div key={group.sectionKey} style={styles.navGroup}>
+              <div style={styles.navSection}>{t(group.sectionKey)}</div>
+              {visibleItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  style={({ isActive }) => ({
+                    ...styles.navItem,
+                    ...(isActive ? styles.navItemActive : {}),
+                  })}
+                >
+                  {({ isActive }) => (
+                    <>
+                      <item.icon size={17} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }} />
+                      <span style={styles.navLabel}>{t(item.labelKey)}</span>
+                      {isActive && <ChevronEnd size={14} style={{ marginInlineStart: 'auto', opacity: 0.6 }} />}
+                    </>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          )
+        })}
       </nav>
 
       <div style={{ flex: 1 }} />
@@ -129,12 +140,28 @@ export default function Sidebar() {
 
       {/* User */}
       <div style={styles.userRow}>
-        <div style={styles.avatar}>
+        <div style={{
+          ...styles.avatar,
+          background: ROLE_META[role]?.bg || 'rgba(255,255,255,0.15)',
+          color: ROLE_META[role]?.color || 'white',
+          border: `1.5px solid ${ROLE_META[role]?.color || 'transparent'}40`,
+        }}>
           {(user.full_name || 'U').charAt(0).toUpperCase()}
         </div>
         <div style={styles.userInfo}>
           <div style={styles.userName}>{user.full_name || t('role.unknown')}</div>
-          <div style={styles.userRole}>{roleLabel(user.role, t)}</div>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px',
+            padding: '1px 7px', borderRadius: '20px',
+            background: ROLE_META[role]?.bg || 'rgba(255,255,255,0.1)',
+            color: ROLE_META[role]?.color || 'rgba(255,255,255,0.5)',
+            fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.02em',
+          }}>
+            {role === 'presidency' && '👑 '}
+            {role === 'institution_admin' && '🏛 '}
+            {role === 'viewer' && '👁 '}
+            {ROLE_META[role]?.label || role}
+          </div>
         </div>
         <button style={styles.logoutBtn} onClick={handleLogout} title={t('sidebar.logout')}>
           <LogOut size={15} />
@@ -142,15 +169,6 @@ export default function Sidebar() {
       </div>
     </aside>
   )
-}
-
-function roleLabel(role, t) {
-  const map = {
-    presidency: 'role.presidency',
-    institution_admin: 'role.institution_admin',
-    viewer: 'role.viewer',
-  }
-  return map[role] ? t(map[role]) : (role || t('role.unknown'))
 }
 
 const styles = {

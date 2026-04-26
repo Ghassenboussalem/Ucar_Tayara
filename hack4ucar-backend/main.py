@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -6,6 +7,8 @@ from sqlalchemy import text
 from routes.api import router
 from routes.ingest import router as ingest_router, scan_all_institutions
 from database import SessionLocal
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -22,6 +25,21 @@ async def lifespan(app: FastAPI):
             f"[Alert Engine] Startup scan: {stats['institutions']} institutions, "
             f"{stats['created']} alerts created, {stats['resolved']} auto-resolved."
         )
+
+    # Auto-ingest RAG knowledge base (idempotent — skips already-indexed chunks)
+    try:
+        from services.rag_service import ingest_directory
+        rag_stats = ingest_directory()
+        if rag_stats.get("errors"):
+            logger.warning(f"[RAG] Startup ingestion errors: {rag_stats['errors']}")
+        else:
+            logger.info(
+                f"[RAG] Knowledge base ready: {rag_stats.get('total_docs', 0)} chunks indexed "
+                f"({rag_stats.get('ingested', 0)} new, {rag_stats.get('skipped', 0)} skipped)."
+            )
+    except Exception as rag_err:
+        logger.warning(f"[RAG] Startup ingestion skipped: {rag_err}")
+
     yield
 
 

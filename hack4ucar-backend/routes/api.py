@@ -10,7 +10,7 @@ from services.claude_service import explain_anomaly, generate_report_summary
 from services.agent_service import run_agent
 from agents.orchestrator import orchestrator
 from services.report_service import generate_pdf_report, generate_excel_report
-from services.auth_service import authenticate_user, create_access_token
+from services.auth_service import authenticate_user, create_access_token, get_optional_user
 
 router = APIRouter()
 
@@ -133,12 +133,12 @@ def get_dashboard(db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────────────────────
 
 @router.get("/institutions", response_model=List[InstitutionOut])
-def get_institutions(db: Session = Depends(get_db)):
+def get_institutions(db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     return db.query(Institution).filter(Institution.is_active == True).all()
 
 
 @router.get("/institutions/scores")
-def get_institution_scores(db: Session = Depends(get_db)):
+def get_institution_scores(db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     """Return health score and alert counts for all active institutions."""
     institutions = db.query(Institution).filter(Institution.is_active == True).all()
     result = []
@@ -187,7 +187,7 @@ def get_institution_scores(db: Session = Depends(get_db)):
 
 
 @router.get("/institutions/{institution_id}", response_model=InstitutionOut)
-def get_institution(institution_id: int, db: Session = Depends(get_db)):
+def get_institution(institution_id: int, db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     inst = db.query(Institution).filter(Institution.id == institution_id).first()
     if not inst:
         raise HTTPException(status_code=404, detail="Institution introuvable")
@@ -199,28 +199,28 @@ def get_institution(institution_id: int, db: Session = Depends(get_db)):
 # ─────────────────────────────────────────────────────────────
 
 @router.get("/kpis/{institution_id}/academic", response_model=List[AcademicKPIOut])
-def get_academic_kpis(institution_id: int, db: Session = Depends(get_db)):
+def get_academic_kpis(institution_id: int, db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     return db.query(AcademicKPI).filter(
         AcademicKPI.institution_id == institution_id
     ).order_by(AcademicKPI.semester).all()
 
 
 @router.get("/kpis/{institution_id}/finance", response_model=List[FinanceKPIOut])
-def get_finance_kpis(institution_id: int, db: Session = Depends(get_db)):
+def get_finance_kpis(institution_id: int, db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     return db.query(FinanceKPI).filter(
         FinanceKPI.institution_id == institution_id
     ).order_by(FinanceKPI.fiscal_year).all()
 
 
 @router.get("/kpis/{institution_id}/hr", response_model=List[HRKPIOut])
-def get_hr_kpis(institution_id: int, db: Session = Depends(get_db)):
+def get_hr_kpis(institution_id: int, db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     return db.query(HRKPI).filter(
         HRKPI.institution_id == institution_id
     ).order_by(HRKPI.semester).all()
 
 
 @router.get("/kpis/{institution_id}/all")
-def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
+def get_all_kpis(institution_id: int, db: Session = Depends(get_db), _user=Depends(get_optional_user)):
     """Get all KPIs for an institution in one call — used by frontend drill-down."""
     inst = db.query(Institution).filter(Institution.id == institution_id).first()
     if not inst:
@@ -727,7 +727,8 @@ def get_alerts(
     severity: Optional[str] = None,
     domain: Optional[str] = None,
     institution_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _user=Depends(get_optional_user),
 ):
     q = db.query(Alert, Institution.name_fr).join(
         Institution, Alert.institution_id == Institution.id
@@ -784,6 +785,121 @@ def explain_alert(alert_id: int, db: Session = Depends(get_db)):
 # AI CHAT — Agno multi-agent orchestrator (primary)
 #           Falls back to tool-use agent for deep DB/RAG queries
 # ─────────────────────────────────────────────────────────────
+
+def _detect_institution(message: str, institutions: list) -> Optional[object]:
+    """Scan the message for institution codes or name fragments.
+    Returns the Institution ORM object if found, otherwise None."""
+    msg_lower = message.lower()
+    # Priority 1: exact code match (e.g. INSAT, FSB, IHEC)
+    for inst in institutions:
+        if inst.code.lower() in msg_lower:
+            return inst
+    # Priority 2: significant name fragment (first meaningful word, >= 4 chars)
+    for inst in institutions:
+        fragments = [w for w in inst.name_fr.lower().split() if len(w) >= 4
+                     and w not in ('de', 'du', 'des', 'la', 'le', 'les', 'et', 'en', 'par', 'pour', 'sur', 'avec')]
+        if any(frag in msg_lower for frag in fragments[:3]):
+            return inst
+    return None
+
+
+def _build_focused_context(db: Session, inst) -> str:
+    """Build a rich, focused context for a single institution (much smaller than full network dump)."""
+    latest_acad = db.query(AcademicKPI).filter(
+        AcademicKPI.institution_id == inst.id
+    ).order_by(AcademicKPI.id.desc()).first()
+    latest_fin = db.query(FinanceKPI).filter(
+        FinanceKPI.institution_id == inst.id
+    ).order_by(FinanceKPI.id.desc()).first()
+    latest_hr = db.query(HRKPI).filter(
+        HRKPI.institution_id == inst.id
+    ).order_by(HRKPI.id.desc()).first()
+    latest_esg = db.query(ESGKPI).filter(
+        ESGKPI.institution_id == inst.id
+    ).order_by(ESGKPI.id.desc()).first()
+    latest_research = db.query(ResearchKPI).filter(
+        ResearchKPI.institution_id == inst.id
+    ).order_by(ResearchKPI.id.desc()).first()
+    latest_employment = db.query(EmploymentKPI).filter(
+        EmploymentKPI.institution_id == inst.id
+    ).order_by(EmploymentKPI.id.desc()).first()
+    inst_alerts = db.query(Alert).filter(
+        Alert.institution_id == inst.id,
+        Alert.is_resolved == False
+    ).all()
+
+    # Network averages for benchmarking
+    avg_success = db.query(func.avg(AcademicKPI.success_rate)).scalar()
+    avg_dropout = db.query(func.avg(AcademicKPI.dropout_rate)).scalar()
+    avg_budget  = db.query(func.avg(FinanceKPI.budget_execution_rate)).scalar()
+
+    lines = [
+        f"=== INSTITUTION : {inst.code} | {inst.name_fr} ===",
+        f"Type: {inst.type} | Gouvernorat: {inst.governorate} | Ville: {inst.city}",
+        f"Directeur: {inst.director_name} | Capacité: {inst.student_capacity} étudiants",
+        "",
+        f"=== MOY. RÉSEAU (référence) ===",
+        f"Réussite moy.: {round(float(avg_success),1) if avg_success else 'N/A'}% | "
+        f"Abandon moy.: {round(float(avg_dropout),1) if avg_dropout else 'N/A'}% | "
+        f"Budget moy.: {round(float(avg_budget),1) if avg_budget else 'N/A'}%",
+    ]
+
+    if latest_acad:
+        lines += [
+            "",
+            f"=== ACADÉMIQUE ({latest_acad.semester}) ===",
+            f"Réussite: {float(latest_acad.success_rate or 0):.1f}% | "
+            f"Abandon: {float(latest_acad.dropout_rate or 0):.1f}% | "
+            f"Présence: {float(latest_acad.attendance_rate or 0):.1f}% | "
+            f"Note moy.: {float(latest_acad.avg_grade or 0):.2f}/20",
+        ]
+    if latest_fin:
+        lines += [
+            "",
+            f"=== FINANCES ({latest_fin.fiscal_year}) ===",
+            f"Exécution budgétaire: {float(latest_fin.budget_execution_rate or 0):.1f}% | "
+            f"Coût/étudiant: {float(latest_fin.cost_per_student or 0):,.0f} TND",
+        ]
+    if latest_hr:
+        lines += [
+            "",
+            f"=== RH ({latest_hr.semester}) ===",
+            f"Enseignants: {latest_hr.total_teaching_staff} | "
+            f"Administratifs: {latest_hr.total_admin_staff} | "
+            f"Absentéisme: {float(latest_hr.absenteeism_rate or 0):.1f}% | "
+            f"Charge: {float(latest_hr.avg_teaching_load_hours or 0):.1f}h/sem",
+        ]
+    if latest_esg:
+        lines += [
+            "",
+            f"=== ESG ({latest_esg.fiscal_year}) ===",
+            f"Recyclage: {float(latest_esg.recycling_rate or 0):.1f}% | "
+            f"Score accessibilité: {float(latest_esg.accessibility_score or 0):.0f}/100 | "
+            f"Empreinte CO₂: {float(latest_esg.carbon_footprint_tons or 0):.0f} t",
+        ]
+    if latest_research:
+        lines += [
+            "",
+            f"=== RECHERCHE ({latest_research.academic_year}) ===",
+            f"Publications: {latest_research.publications_count} | "
+            f"Projets actifs: {latest_research.active_projects} | "
+            f"Doctorants: {latest_research.phd_students}",
+        ]
+    if latest_employment:
+        lines += [
+            "",
+            f"=== EMPLOYABILITÉ ({latest_employment.graduation_year}) ===",
+            f"Employabilité 6m: {float(latest_employment.employability_rate_6m or 0):.1f}% | "
+            f"Employabilité 12m: {float(latest_employment.employability_rate_12m or 0):.1f}%",
+        ]
+    if inst_alerts:
+        lines.append("")
+        lines.append(f"=== ALERTES ACTIVES ({len(inst_alerts)}) ===")
+        for a in inst_alerts:
+            lines.append(f"[{a.severity.upper()}] {a.title} (KPI: {a.kpi_name}={float(a.kpi_value or 0):.1f})")
+
+    return "\n".join(lines)
+
 
 def _build_context(db: Session) -> str:
     """Build a rich text snapshot of current DB state for the Agno agents."""
@@ -904,7 +1020,15 @@ def chat(request: ChatMessage, db: Session = Depends(get_db)):
 
     # ── Agno multi-agent orchestrator (analysis, benchmarks, forecasts, strategy)
     try:
-        context = _build_context(db)
+        # ── Smart context selection: focused vs full network dump ────────────────
+        institutions_all = db.query(Institution).filter(Institution.is_active == True).all()
+        detected_inst = _detect_institution(message, institutions_all)
+        if detected_inst:
+            context = _build_focused_context(db, detected_inst)
+            _context_type = f"focused:{detected_inst.code}"
+        else:
+            context = _build_context(db)
+            _context_type = "full_network"
 
         # Optionally enrich with RAG knowledge base results
         rag_section = ""

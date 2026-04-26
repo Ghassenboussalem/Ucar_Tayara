@@ -3,13 +3,11 @@ import { Search, Sparkles, Building2, ChevronDown, X } from 'lucide-react'
 import { getInstitutions } from '../api/client'
 import { getSelectedInstitution, setSelectedInstitution } from '../utils/institutionFilter'
 import { useLang } from '../contexts/LangContext'
+import { useAuth } from '../contexts/AuthContext'
 
 export default function TopBar({ onOpenChat }) {
   const { lang, toggleLang, t, isRTL, dateLocale } = useLang()
-  const user = (() => {
-    try { return JSON.parse(localStorage.getItem('ucar_user') || '{}') } catch { return {} }
-  })()
-  const isPresidency = user.role === 'presidency'
+  const { user, role, institutionId, isPresidency } = useAuth()
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? t('topbar.morning') : hour < 18 ? t('topbar.afternoon') : t('topbar.evening')
@@ -24,8 +22,17 @@ export default function TopBar({ onOpenChat }) {
   useEffect(() => {
     if (isPresidency) {
       getInstitutions().then(setInstitutions).catch(() => {})
+    } else if (institutionId) {
+      // Auto-set institution filter to the user's own institution
+      getInstitutions().then((list) => {
+        const mine = list.find((i) => i.id === institutionId) || null
+        if (mine) {
+          setSelected(mine)
+          setSelectedInstitution(mine)
+        }
+      }).catch(() => {})
     }
-  }, [isPresidency])
+  }, [isPresidency, institutionId])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -90,8 +97,8 @@ export default function TopBar({ onOpenChat }) {
       </div>
 
       <div style={rightStyle}>
-        {/* Institution Switcher — only for presidency role */}
-        {isPresidency && (
+        {/* Institution Switcher — dropdown for presidency, static badge for others */}
+        {isPresidency ? (
           <div ref={dropRef} style={{ position: 'relative' }}>
             <button
               id="btn-institution-filter"
@@ -137,6 +144,13 @@ export default function TopBar({ onOpenChat }) {
                 </div>
               </div>
             )}
+          </div>
+        ) : selected && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 12px', borderRadius: '8px', border: '1.5px solid rgb(29,83,148)', background: 'rgba(29,83,148,0.04)', fontSize: '0.8rem', fontWeight: 600, color: 'rgb(29,83,148)' }}>
+            <Building2 size={14} />
+            <span style={{ maxWidth: '160px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {selected.code + ' — ' + institutionName(selected).split(' ').slice(0, 3).join(' ')}
+            </span>
           </div>
         )}
 

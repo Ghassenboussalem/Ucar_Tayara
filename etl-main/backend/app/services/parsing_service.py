@@ -56,14 +56,38 @@ def parse_payload(content: bytes, filename: str) -> tuple[list[dict], int]:
 
 
 def parse_text_payload(text: str) -> tuple[list[dict], int]:
+    """Parse OCR-extracted text into structured rows.
+
+    Tries CSV, TSV, and semicolon-separated formats in order.
+    Falls back to a single raw_text row so the job never crashes
+    (the data officer can review/correct it in the UI).
+    """
     content = text.strip()
     if not content:
         raise ValueError("OCR extracted empty text")
+
+    # Try comma CSV first (most common after Groq structuring)
     reader = csv.DictReader(StringIO(content))
     rows = [dict(row) for row in reader]
-    if not reader.fieldnames:
-        raise ValueError("OCR output is not a structured table")
-    return rows, estimate_extraction_quality(rows)
+    if reader.fieldnames and rows:
+        return rows, estimate_extraction_quality(rows)
+
+    # Try tab-separated (common from pdfplumber on tables)
+    reader_tsv = csv.DictReader(StringIO(content), delimiter='\t')
+    rows_tsv = [dict(row) for row in reader_tsv]
+    if reader_tsv.fieldnames and rows_tsv:
+        return rows_tsv, estimate_extraction_quality(rows_tsv)
+
+    # Try semicolon-separated (common in French locale exports)
+    reader_semi = csv.DictReader(StringIO(content), delimiter=';')
+    rows_semi = [dict(row) for row in reader_semi]
+    if reader_semi.fieldnames and rows_semi:
+        return rows_semi, estimate_extraction_quality(rows_semi)
+
+    # Last resort: return a single raw_text row so the job doesn't crash.
+    # Extraction quality is 0 — the UI will flag it as "needs_review".
+    fallback = [{"raw_text": content[:2000]}]
+    return fallback, 0
 
 
 def estimate_extraction_quality(rows: list[dict]) -> int:
