@@ -103,7 +103,7 @@ export default function LoginPage() {
 
           {error && (
             <div style={styles.errorBanner}>
-              <span>⚠</span> {error}
+              <AlertTriangle size={16} /> {error}
             </div>
           )}
 

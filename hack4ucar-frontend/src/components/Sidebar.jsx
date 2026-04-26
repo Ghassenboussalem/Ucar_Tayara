@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   TrendingUp,
   Lock,
+  Network,
+  Map,
   Brain,
   FlaskConical,
   Handshake,

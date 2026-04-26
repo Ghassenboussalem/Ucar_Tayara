@@ -322,6 +322,16 @@ export default function AIChatDrawer({ open, onClose }) {
               {suggested.map((s) => (
                 <button key={s} style={S.chip} onClick={() => handleSend(s)}>{s}</button>
               ))}
+      {/* Messages */}
+      <div style={S.messages}>
+        {messages.map((msg, i) => {
+          const isUser = msg.role === 'user'
+          return (
+            <div key={i} style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: '8px' }}>
+              {!isUser && <div style={S.aiAvatar}><Sparkles size={12} /></div>}
+              <div style={{ ...S.bubble, ...(isUser ? S.bubbleUser : S.bubbleAI) }}>
+                {msg.loading ? <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Analyse en cours…</span> : msg.content}
+              </div>
             </div>
           </div>
         )}

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts'
 import { getDashboard, getAlerts, resolveAlert, explainAlert } from '../api/client'
 import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical, ChevronLeft } from 'lucide-react'
+import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, ChevronLeft, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical, Lightbulb, GraduationCap, DollarSign, Bot } from 'lucide-react'
 import client from '../api/client'
 import WhatIfPanel from '../components/WhatIfPanel'
 import { getSelectedInstitution } from '../utils/institutionFilter'
@@ -10,6 +11,8 @@ import { useLang } from '../contexts/LangContext'
 
 const TOTAL_STUDENTS_DISPLAY = 31500
 const PAGE_SIZE = 5
+
+const PRED_ICON_MAP = { pred_dropout: GraduationCap, pred_budget: DollarSign, pred_load: Users }
 
 // Mini sparkline data helper
 function mkSpark(base, n = 8) {
@@ -85,7 +88,7 @@ function PredictionCard({ pred, confidenceLabel, simulateLabel }) {
     <div style={{ background: 'white', borderRadius: '12px', padding: '18px', border: '1px solid #e2e8f0', borderLeft: `4px solid ${color}`, display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '1.2rem' }}>{pred.icon}</span>
+          {(() => { const Icon = PRED_ICON_MAP[pred.id]; return Icon ? <Icon size={18} color={color} /> : null })()}
           <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>{pred.title}</span>
         </div>
         <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: color + '12', color }}>{pred.confidence}% {confidenceLabel}</span>
@@ -104,8 +107,8 @@ function PredictionCard({ pred, confidenceLabel, simulateLabel }) {
           </div>
         </div>
       </div>
-      <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5, background: '#f8fafc', padding: '8px 10px', borderRadius: '6px' }}>
-        💡 {pred.explanation}
+      <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5, background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+        <Lightbulb size={13} style={{ flexShrink: 0, marginTop: '1px', color: '#f59e0b' }} /> {pred.explanation}
       </div>
       {pred.onSimulate && (
         <button onClick={pred.onSimulate} style={{ marginTop: '8px', padding: '5px 12px', borderRadius: '7px', border: '1px solid rgba(29,83,148,0.2)', background: 'rgba(29,83,148,0.05)', color: 'rgb(29,83,148)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'Inter,sans-serif', display: 'flex', alignItems: 'center', gap: '5px', width: '100%', justifyContent: 'center' }}>
@@ -129,6 +132,8 @@ export default function DashboardPage() {
   const [explaining, setExplaining] = useState({})
   const [selectedInst, setSelectedInst] = useState(() => getSelectedInstitution())
   const [instPage, setInstPage] = useState(0)
+  const [instPage, setInstPage] = useState(0)
+  const INST_PAGE_SIZE = 7
 
   const severityLabels = {
     critical: t('sev.critical'),
@@ -268,6 +273,7 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {pagedInstitutions.map((inst) => (
+                {(dash?.institutions || []).slice(instPage * INST_PAGE_SIZE, (instPage + 1) * INST_PAGE_SIZE).map((inst) => (
                   <tr key={inst.id} style={S.tr}>
                     <td style={S.td}>
                       <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.82rem' }}>{inst.name_fr}</div>
@@ -317,6 +323,44 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
+          {/* Pagination */}
+          {(() => {
+            const total = (dash?.institutions || []).length
+            const totalPages = Math.ceil(total / INST_PAGE_SIZE)
+            if (totalPages <= 1) return null
+            const start = instPage * INST_PAGE_SIZE + 1
+            const end = Math.min((instPage + 1) * INST_PAGE_SIZE, total)
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '12px', borderTop: '1px solid #f1f5f9', marginTop: '4px' }}>
+                <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{start}–{end} sur {total} institutions</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    onClick={() => setInstPage((p) => p - 1)}
+                    disabled={instPage === 0}
+                    style={{ ...S.pageBtn, opacity: instPage === 0 ? 0.35 : 1 }}
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setInstPage(i)}
+                      style={{ ...S.pageBtn, ...(i === instPage ? S.pageBtnActive : {}) }}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setInstPage((p) => p + 1)}
+                    disabled={instPage === totalPages - 1}
+                    style={{ ...S.pageBtn, opacity: instPage === totalPages - 1 ? 0.35 : 1 }}
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
         </div>
 
         {/* Alerts feed */}
@@ -388,4 +432,6 @@ const S = {
   alertCard: { padding: '12px', borderRadius: '10px', border: '1px solid #f1f5f9', background: '#fafbff' },
   alertBtnExplain: { padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: 'white', fontSize: '0.72rem', color: '#374151', cursor: 'pointer', fontFamily: 'Inter, sans-serif' },
   alertBtnResolve: { padding: '4px 10px', borderRadius: '6px', border: 'none', background: 'rgba(39,174,96,0.1)', fontSize: '0.72rem', color: '#16a34a', cursor: 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '4px' },
+  pageBtn: { width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, fontFamily: 'Inter, sans-serif', transition: 'all 150ms' },
+  pageBtnActive: { background: 'rgb(29,83,148)', color: 'white', border: '1px solid rgb(29,83,148)' },
 }

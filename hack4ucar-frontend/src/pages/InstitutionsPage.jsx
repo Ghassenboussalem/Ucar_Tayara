@@ -38,6 +38,12 @@ export default function InstitutionsPage() {
             {tx('Réseau UCAR', 'شبكة UCAR')} - {institutions.length} {tx('établissements', 'مؤسسة')}
           </p>
         </div>
+        <button
+          onClick={() => navigate('/map')}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', background: 'white', border: '1.5px solid #e2e8f0', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, color: '#374151', cursor: 'pointer', fontFamily: 'Inter, sans-serif', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}
+        >
+          <Map size={15} color="rgb(29,83,148)" /> Voir la carte
+        </button>
       </div>
 
       {/* Search */}

@@ -7,6 +7,8 @@ import AlertsPage from './pages/AlertsPage'
 import InstitutionDetailPage from './pages/InstitutionDetailPage'
 import ReportsPage from './pages/ReportsPage'
 import InstitutionsPage from './pages/InstitutionsPage'
+import CausalGraphPage from './pages/CausalGraphPage'
+import MapPage from './pages/MapPage'
 import PredictiveAnalyticsPage from './pages/PredictiveAnalyticsPage'
 import DataIngestionPage from './pages/DataIngestionPage'
 

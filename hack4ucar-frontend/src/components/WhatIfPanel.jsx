@@ -174,8 +174,8 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              💡 {active.detail}
+            <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+              <Lightbulb size={14} style={{ flexShrink: 0, marginTop: '2px', color: '#f59e0b' }} /> {active.detail}
             </div>
 
             {/* Comparison bar */}
