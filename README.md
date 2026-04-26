@@ -297,6 +297,17 @@ Interface de téléversement et de traitement des données institutionnelles.
 - `.pdf` (scanné / arabe) : OCR via Groq Llama 4 Vision
 - `.png` / `.jpg` : OCR vision avec structuration automatique
 
+**OCR & Multilingual Extraction**
+
+Binary documents (`pdf`, `png`, `jpg`, etc.) now use a layered OCR strategy:
+
+1. `pdfplumber` for text-based PDFs
+2. `paddleocr` (optional if installed) for scanned pages/images
+3. `easyocr` (optional if installed) for harder handwritten-like image text
+4. `pytesseract` (`ara+fra+eng`) fallback for images
+5. Optional Groq VLM structuring pass (if `GROQ_API_KEY` is provided)
+6. Heuristic local structuring fallback (`grades` / `budget`)
+
 **Graphe réseau des ingestions :**
 Chaque fichier ingéré apparaît dans un graphe D3 force-directed. Les nœuds institutions (bleus, grands) sont connectés à leurs fichiers (colorés par domaine). Au survol : nom du fichier, domaine, statut, nombre de lignes, horodatage. Les nouveaux fichiers ont une aura lumineuse (glow).
 
@@ -621,6 +632,54 @@ Exemples :
 **Domaines reconnus :** `academic`, `finance`, `hr`, `research`, `esg`, `infrastructure`, `partnership`, `employment`
 
 ---
+
+## Security & Auth
+
+### Intelligence Platform (JWT)
+
+- JWT signed with `SECRET_KEY`, algorithm HS256, expiry 480 minutes
+- Token payload: `{sub: user_id, email, role, institution_id}`
+- `get_current_user(token)` FastAPI dependency
+- Roles: `presidency`, `institution_admin`, `viewer`
+
+### ETL Data Hub (JWT + RBAC)
+
+- JWT signed with `JWT_SECRET_KEY`, algorithm HS256, expiry 1440 minutes (24h)
+- `require_roles(*roles)` dependency decorator — returns 403 if role not allowed
+- Roles: `admin`, `dean`, `professor`, `data_officer`, `auditor`
+- Passwords hashed with bcrypt (passlib)
+- Auto-seeded user on startup: `admin1` / `admin123`
+- API key (`X-ETL-API-Key`) guards the `/api/import/kpis` ETL bridge endpoint
+
+### ETL → Platform Bridge Security
+
+The ETL service sends `X-ETL-API-Key: <ETL_API_KEY>` on every KPI push. Set the same value in both `.env` files.
+
+---
+
+## Data Flows
+
+### Document Ingestion → Alert on Dashboard
+
+```
+Institution user uploads PDF/CSV/PNG (manual or email attachment)
+    │
+    ▼ ETL: upload-async
+    ├─ OCR (pdfplumber / Paddle / Tesseract / Groq VLM)
+    ├─ Parse → row list
+    ├─ Validate → anomaly list
+    ├─ Compute KPIs (derived fields)
+    └─ platform_bridge.push_kpis()
+           │
+           ▼ HTTP POST /api/import/kpis
+           ├─ Upsert domain table (academic_kpis / finance_kpis / …)
+           └─ Fire alert rules → create Alert rows
+                  │
+                  ▼ Frontend polling
+                  GET /api/alerts → DashboardPage alert table
+                  GET /api/alerts/{id}/explain → Claude explanation
+```
+
 
 ## 9. Stack technique complète
 
@@ -1027,6 +1086,14 @@ curl -X POST http://localhost:8000/api/auth/login \
 | `GET` | `/api/jobs` | Liste des jobs avec statut et métadonnées |
 | `GET` | `/api/jobs/{id}` | Détail d'un job ETL |
 
+## Durable Queue (Redis Worker)
+
+Async upload now supports a Redis-backed durable queue:
+
+- Set `QUEUE_BACKEND=redis`
+- Set `REDIS_URL=redis://<host>:6379/0`
+- Set `REDIS_QUEUE_NAME=ingestion`
+- Run worker: `python -m app.worker`
 ---
 
 ## 14. Comptes de démonstration
