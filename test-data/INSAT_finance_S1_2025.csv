@@ -1,0 +1,13 @@
+budget_line,department,allocated_tnd,consumed_tnd,category,fiscal_year
+Salaires enseignants,Informatique,850000,920000,personnel,2025
+Salaires administratifs,Administration,320000,345000,personnel,2025
+Équipements informatiques,Informatique,150000,210000,equipement,2025
+Maintenance bâtiments,Infrastructure,80000,125000,maintenance,2025
+Fournitures bureau,Administration,25000,38000,fournitures,2025
+Eau et électricité,Infrastructure,60000,95000,charges,2025
+Abonnements logiciels,Informatique,45000,72000,logiciel,2025
+Missions et déplacements,Recherche,35000,58000,mission,2025
+Documentation bibliothèque,Bibliothèque,20000,31000,documentation,2025
+Activités culturelles,Vie étudiante,15000,28000,culture,2025
+Formation personnel,RH,30000,52000,formation,2025
+Communication,Marketing,12000,19000,communication,2025

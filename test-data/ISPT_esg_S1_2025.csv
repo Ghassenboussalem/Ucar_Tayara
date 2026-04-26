@@ -1,0 +1,13 @@
+indicator,value,unit,target,period,category,notes
+energy_consumption,1850000,kWh,1500000,S1-2025,energie,Dépassement objectif énergie
+renewable_energy_pct,8.5,percent,30,S1-2025,energie,Faible proportion ENR
+water_consumption,42000,m3,35000,S1-2025,eau,Consommation excessive
+recycling_rate,18,percent,60,S1-2025,dechets,Taux recyclage très insuffisant
+waste_produced,85,tonnes,60,S1-2025,dechets,Déchets produits en hausse
+co2_emissions,420,tonnes_eq_co2,300,S1-2025,carbone,Émissions carbone au-dessus objectif
+green_spaces,1200,m2,2000,S1-2025,biodiversite,Espaces verts insuffisants
+disabled_accessibility_pct,42,percent,80,S1-2025,accessibilite,Accessibilité PMR très faible
+social_events,3,count,10,S1-2025,social,Peu d'événements inclusifs organisés
+gender_balance_teaching_pct,35,percent,50,S1-2025,genre,Déséquilibre genre corps enseignant
+local_suppliers_pct,28,percent,50,S1-2025,achats_responsables,Faible recours fournisseurs locaux
+employee_training_hours,12,hours_per_employee,20,S1-2025,rh,Formation personnel insuffisante

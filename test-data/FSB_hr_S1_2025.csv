@@ -1,0 +1,16 @@
+employee_id,full_name,department,staff_type,contract_type,headcount,working_days,absent_days,resigned,hired,salary_tnd
+EMP001,Prof. Mohamed Kamel,Sciences Biologiques,enseignant,CDI,1,115,28,0,0,4200
+EMP002,Prof. Amira Tlili,Biochimie,enseignant,CDI,1,115,31,0,0,3900
+EMP003,Dr. Hatem Bou Saada,Microbiologie,enseignant,CDD,1,115,25,1,0,3400
+EMP004,Mme. Saoussen Ghorbal,Administration,administratif,CDI,1,115,22,0,0,2100
+EMP005,M. Nabil Farhat,Scolarité,administratif,CDI,1,115,35,0,0,1950
+EMP006,Prof. Leila Ben Fredj,Génétique,enseignant,CDI,1,115,19,0,0,4100
+EMP007,Dr. Imed Khemiri,Physiologie,enseignant,CDD,1,115,27,1,0,3300
+EMP008,Mme. Radhia Ouali,Comptabilité,administratif,CDI,1,115,24,0,0,2200
+EMP009,M. Mounir Chebbi,Maintenance,technique,CDI,1,115,33,0,0,1800
+EMP010,Prof. Zeineb Karray,Botanique,enseignant,CDI,1,115,21,0,0,3700
+EMP011,Dr. Walid Hamdi,Zoologie,enseignant,CDD,1,115,29,1,0,3200
+EMP012,Mme. Ilhem Chouari,Bibliothèque,administratif,CDI,1,115,38,0,0,1900
+EMP013,M. Bechir Dridi,Informatique,technique,CDD,1,115,26,0,1,2400
+EMP014,Prof. Najla Ben Amara,Chimie,enseignant,CDI,1,115,18,0,0,4000
+EMP015,Dr. Slim Hajlaoui,Biophysique,enseignant,CDD,1,115,32,1,0,3100
