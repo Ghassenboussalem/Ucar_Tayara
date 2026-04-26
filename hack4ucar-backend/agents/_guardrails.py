@@ -38,11 +38,14 @@ class DomainScopeGuardrail(BaseGuardrail):
     """Rejects off-topic questions unrelated to university management."""
 
     _ALLOWED = re.compile(
-        r"\b(kpi|institution|étudiant|etudiants|abandon|absent|budget|enseign|"
+        r"(kpi|institution|étudiant|etudiants|abandon|absent|budget|enseign|"
         r"prévision|prevision|alerte|réseau|reseau|essot|ucar|université|universite|"
         r"recommand|semestre|taux|rang|classement|rapport|rh|académique|academique|"
         r"financ|dropout|success|performance|directeur|bilan|carthage|insat|ept|"
-        r"ihec|ipeiem|enstab|iset|isgt|fseg|fst|médecine|medecine|droit|lettres)\b",
+        r"ihec|ipeiem|enstab|iset|isgt|fseg|fst|médecine|medecine|droit|lettres|"
+        r"critiq|reussite|réussite|présence|presence|inscription|examen|rattrapage|"
+        r"partenariat|erasmus|recherche|doctorant|diplom|emploi|accréditation|"
+        r"carte|map|gouvernorat|capacité|diagnostic|prévision|benchmark|comparaison)",
         re.IGNORECASE,
     )
 

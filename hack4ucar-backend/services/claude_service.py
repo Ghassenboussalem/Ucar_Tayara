@@ -55,7 +55,55 @@ def generate_report_summary(
     finance_data: dict,
     hr_data: dict,
     alerts: list,
+    infrastructure_data: dict = None,
+    partnership_data: dict = None,
+    employment_data: dict = None,
+    esg_data: dict = None,
+    research_data: dict = None,
 ) -> str:
+    extra_sections = ""
+
+    if infrastructure_data:
+        extra_sections += f"""
+INFRASTRUCTURE:
+- Occupation des salles: {infrastructure_data.get('classroom_occupancy_rate', 'N/A')}%
+- Équipements IT opérationnels: {infrastructure_data.get('it_equipment_status_pct', 'N/A')}%
+- Disponibilité laboratoires: {infrastructure_data.get('lab_availability_rate', 'N/A')}%
+"""
+
+    if partnership_data:
+        extra_sections += f"""
+PARTENARIATS & MOBILITÉ:
+- Accords internationaux actifs: {partnership_data.get('active_international_agreements', 'N/A')}
+- Étudiants en mobilité (entrants/sortants): {partnership_data.get('incoming_students', 'N/A')} / {partnership_data.get('outgoing_students', 'N/A')}
+- Partenariats industrie: {partnership_data.get('industry_partnerships', 'N/A')}
+"""
+
+    if employment_data:
+        extra_sections += f"""
+EMPLOYABILITÉ:
+- Taux d'employabilité à 6 mois: {employment_data.get('employability_rate_6m', 'N/A')}%
+- Taux d'employabilité à 12 mois: {employment_data.get('employability_rate_12m', 'N/A')}%
+- Délai moyen d'insertion: {employment_data.get('avg_months_to_employment', 'N/A')} mois
+"""
+
+    if esg_data:
+        extra_sections += f"""
+ESG / DÉVELOPPEMENT DURABLE:
+- Empreinte carbone: {esg_data.get('carbon_footprint_tons', 'N/A')} tonnes CO₂
+- Taux de recyclage: {esg_data.get('recycling_rate', 'N/A')}%
+- Score accessibilité: {esg_data.get('accessibility_score', 'N/A')}/100
+"""
+
+    if research_data:
+        extra_sections += f"""
+RECHERCHE SCIENTIFIQUE:
+- Publications: {research_data.get('publications_count', 'N/A')}
+- Projets actifs: {research_data.get('active_projects', 'N/A')}
+- Financements obtenus: {research_data.get('funding_secured_tnd', 'N/A')} TND
+- Doctorants inscrits: {research_data.get('phd_students', 'N/A')}
+"""
+
     prompt = f"""Génère un résumé exécutif professionnel pour le rapport de {institution_name} - Période: {period}
 
 DONNÉES ACADÉMIQUES:
@@ -76,16 +124,16 @@ DONNÉES RH:
 - Personnel administratif: {hr_data.get('total_admin_staff', 'N/A')}
 - Taux d'absentéisme: {hr_data.get('absenteeism_rate', 'N/A')}%
 - Charge d'enseignement moyenne: {hr_data.get('avg_teaching_load_hours', 'N/A')}h/semaine
-
+{extra_sections}
 ALERTES ACTIVES: {len(alerts)}
 {chr(10).join([f"- [{a.get('severity','').upper()}] {a.get('title','')}" for a in alerts[:3]])}
 
-Rédige un résumé exécutif de 150 mots maximum, structuré en:
+Rédige un résumé exécutif de 200 mots maximum, structuré en:
 1. Points forts
 2. Points d'attention
 3. Recommandations prioritaires
 """
-    return simple_complete(SYSTEM_PROMPT, prompt, max_tokens=600)
+    return simple_complete(SYSTEM_PROMPT, prompt, max_tokens=800)
 
 
 def answer_data_question(question: str, context_data: dict) -> str:

@@ -12,6 +12,7 @@ import {
   Network,
   Map,
   Brain,
+  Database,
   FlaskConical,
   Handshake,
   HeartPulse,
@@ -39,15 +40,17 @@ const NAV = [
     sectionKey: 'nav.data',
     items: [
       { to: '/institutions', icon: Building2, labelKey: 'nav.institutions' },
+      { to: '/map', icon: Map, labelKey: 'nav.map' },
       { to: '/alerts', icon: Bell, labelKey: 'nav.alerts', badge: true },
-      { to: '/ingestion', icon: DatabaseZap, labelKey: 'nav.ingestion' },
     ],
   },
   {
     sectionKey: 'nav.intelligence',
     items: [
       { to: '/reports', icon: FileText, labelKey: 'nav.reports' },
+      { to: '/causal', icon: Network, labelKey: 'nav.causal' },
       { to: '/analytics', icon: Brain, labelKey: 'nav.analytics' },
+      { to: '/ingestion', icon: Database, labelKey: 'nav.ingestion' },
     ],
   },
 ]
@@ -93,9 +96,13 @@ export default function Sidebar() {
       {/* Logo */}
       <div style={styles.logo}>
         <div style={styles.logoIcon}>
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-            <path d="M8 22 L16 10 L24 22" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            <path d="M11 18 L21 18" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            {/* Shield crest shape */}
+            <path d="M24 4 L40 10 L40 26 C40 35 32 42 24 45 C16 42 8 35 8 26 L8 10 Z" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5"/>
+            {/* U letter */}
+            <path d="M16 16 L16 26 C16 31 20 33 24 33 C28 33 32 31 32 26 L32 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+            {/* Crossbar decoration */}
+            <path d="M19 37 L29 37" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
         <div>

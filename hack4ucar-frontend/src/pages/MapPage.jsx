@@ -13,52 +13,55 @@ const TUNISIA_CENTER = [33.8869, 9.5375]
 const TUNISIA_ZOOM = 7
 
 const INSTITUTION_COORDS = {
-  // Bizerte governorate
-  'FSB':    { lat: 37.2650, lng:  9.8760 },  // Jarzouna
-  'ENITAB': { lat: 37.2083, lng:  9.8200 },  // Menzel Jemil
-  'ISGB':   { lat: 37.2720, lng:  9.8640 },  // Bizerte centre
-  'ISSATM': { lat: 37.0415, lng:  9.6650 },  // Mateur
-  'ISSMB':  { lat: 37.1575, lng:  9.7900 },  // Menzel Bourguiba
+  // ── Bizerte governorate ────────────────────────────────────
+  'FSB':    { lat: 37.2725, lng:  9.8770 },  // Faculté des Sciences – Jarzouna/Zarzouna
+  'ENITAB': { lat: 37.2700, lng:  9.8730 },  // Ecole Ingénieurs – Zarzouna (same campus as FSB/ISGB)
+  'ISGB':   { lat: 37.2736, lng:  9.8749 },  // Institut de Gestion – Zarzouna/Bizerte
+  'ISSATM': { lat: 37.0422, lng:  9.6637 },  // Institut Sciences Appliquées – Mateur
+  'ISSMB':  { lat: 37.1553, lng:  9.7983 },  // Institut Systèmes Industriels – Menzel Bourguiba
 
-  // Nabeul governorate
-  'FSEGN':  { lat: 36.4561, lng: 10.7376 },  // Nabeul
-  'IPEIN':  { lat: 36.4530, lng: 10.7350 },  // Nabeul
-  'ISLN':   { lat: 36.3994, lng: 10.6131 },  // Hammamet
-  'ISETH':  { lat: 36.5780, lng: 10.8600 },  // Korba
+  // ── Nabeul governorate ─────────────────────────────────────
+  'FSEGN':  { lat: 36.4561, lng: 10.7376 },  // Faculté Sciences Eco – Nabeul campus
+  'IPEIN':  { lat: 36.4519, lng: 10.7282 },  // IPEI – Nabeul campus
+  'ISLN':   { lat: 36.4533, lng: 10.7290 },  // Institut Langues – Nabeul campus
+  'ISETH':  { lat: 36.4001, lng: 10.6145 },  // Institut Tourisme & Hôtellerie – Hammamet
 
-  // Zaghouan governorate
-  'ISGZ':   { lat: 36.4029, lng: 10.1430 },  // Zaghouan city
-  'ENSTAB': { lat: 36.7160, lng: 10.3780 },  // Borj Cedria
-  'ISSTE':  { lat: 36.7130, lng: 10.3820 },  // Borj Cedria
-  'ISTEUB': { lat: 36.7190, lng: 10.3750 },  // Borj Cedria
+  // ── Zaghouan governorate / Borj Cedria technopole ──────────
+  'ISGZ':   { lat: 36.4021, lng: 10.1433 },  // Institut de Gestion – Zaghouan city
+  'ENSTAB': { lat: 36.7165, lng: 10.3793 },  // Ecole Sciences & Tech Avancées – Borj Cedria
+  'ISSTE':  { lat: 36.7130, lng: 10.3850 },  // Institut Sciences Env. – Borj Cedria
+  'ISTEUB': { lat: 36.7200, lng: 10.3760 },  // Institut Tech Env. Urbanisme – Borj Cedria
 
-  // Ariana governorate — La Soukra cluster
-  'ENIC':   { lat: 36.8620, lng: 10.1590 },
-  'ESIAT':  { lat: 36.8600, lng: 10.1570 },
-  'ISTIC':  { lat: 36.8640, lng: 10.1610 },
-  'IPSETC': { lat: 36.8580, lng: 10.1550 },
-  // Ariana — Raoued
-  'ESAC':   { lat: 36.8940, lng: 10.1550 },
-  'SUPCOM': { lat: 36.8910, lng: 10.1520 },
-  // Ariana — La Rabta
-  'INAT':   { lat: 36.8360, lng: 10.1780 },
+  // ── Ariana governorate ─────────────────────────────────────
+  // La Soukra / Charguia cluster
+  'ENIC':   { lat: 36.8549, lng: 10.2203 },  // Ecole Ingénieurs Carthage – Charguia 2
+  'ESIAT':  { lat: 36.8590, lng: 10.1560 },  // Ecole Industries Alimentaires – La Soukra
+  'ISTIC':  { lat: 36.8620, lng: 10.1600 },  // Institut Tech Info – La Soukra
+  'IPSETC': { lat: 36.8560, lng: 10.1540 },  // IPSET Carthage – La Soukra
+  // El Ghazala Technopole / Raoued
+  'SUPCOM': { lat: 36.9095, lng: 10.1860 },  // SUP'COM – El Ghazala Technopole
+  'ESAC':   { lat: 36.8952, lng: 10.1607 },  // Ecole Sup. Agriculture Carthage – Raoued
+  // Inner Tunis (Bab Saadoun / Av. Charles Nicolle)
+  'INAT':   { lat: 36.8363, lng: 10.1683 },  // Institut National Agronomique – Av. Charles Nicolle
 
-  // Tunis governorate — centre/inner
-  'FSJPST': { lat: 36.8190, lng: 10.1660 },  // Tunis centre
-  'ESSA':   { lat: 36.8390, lng: 10.1620 },  // Bab Saadoun
-  'INSAT':  { lat: 36.8420, lng: 10.2010 },  // Centre Urbain Nord
-  'INTES':  { lat: 36.8240, lng: 10.1810 },  // Montfleury
-  'IPEIEM': { lat: 36.8310, lng: 10.1700 },  // El Manar
-  'ISCE':   { lat: 36.8100, lng: 10.0980 },  // Manouba
-  // Tunis — northern suburbs (La Marsa / Carthage / Sidi Bou Said)
-  'ENAU':   { lat: 36.8688, lng: 10.3468 },  // Sidi Bou Said
-  'EPT':    { lat: 36.8760, lng: 10.3180 },  // La Marsa
-  'IPEST':  { lat: 36.8740, lng: 10.3220 },  // La Marsa
-  'IHEC':   { lat: 36.8470, lng: 10.3300 },  // Carthage
-  'ISAMM':  { lat: 36.8500, lng: 10.3340 },  // Carthage Dermech
-  'ISBAT':  { lat: 36.8330, lng: 10.3000 },  // Le Kram
-  // Tunis — south-east
-  'ESSTHS': { lat: 36.7420, lng: 10.3200 },  // Sidi Dhrif
+  // ── Tunis / Ben Arous ──────────────────────────────────────
+  // Central Tunis
+  'FSJPST': { lat: 36.8200, lng: 10.1701 },  // Faculté Droit – La Rabta
+  'ESSA':   { lat: 36.8357, lng: 10.1698 },  // Ecole Santé – Bab Saadoun
+  'INTES':  { lat: 36.8240, lng: 10.1810 },  // Institut Travail – Montfleury
+  'ISCE':   { lat: 36.8099, lng: 10.0972 },  // Institut Comptabilité – Manouba
+  // Centre Urbain Nord / El Manar campus
+  'INSAT':  { lat: 36.8462, lng: 10.2046 },  // INSAT – Centre Urbain Nord
+  'IPEIEM': { lat: 36.8394, lng: 10.2028 },  // IPEI El Manar – Campus El Manar
+  // Northern suburbs: La Marsa / Carthage / Sidi Bou Said
+  'EPT':    { lat: 36.8778, lng: 10.3221 },  // Ecole Polytechnique – La Marsa
+  'IPEST':  { lat: 36.8754, lng: 10.3195 },  // IPEST – La Marsa
+  'ENAU':   { lat: 36.8688, lng: 10.3468 },  // Ecole Architecture – Sidi Bou Said
+  'IHEC':   { lat: 36.8481, lng: 10.3332 },  // IHEC – Carthage Présidence
+  'ISAMM':  { lat: 36.8510, lng: 10.3355 },  // Institut Arts Multimédia – Carthage annexe
+  'ISBAT':  { lat: 36.8330, lng: 10.3000 },  // Beaux-Arts – Le Kram, UCAR annexe
+  // South-east (Ben Arous)
+  'ESSTHS': { lat: 36.7423, lng: 10.3196 },  // Ecole Habitat – Sidi Dhrif
 }
 
 const TYPE_COLOR = { faculte: '#3B82F6', ecole: '#F59E0B', institut: '#10B981' }

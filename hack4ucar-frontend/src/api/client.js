@@ -41,6 +41,9 @@ export const getDashboard = () =>
 export const getInstitutions = () =>
   client.get('/institutions').then((r) => r.data)
 
+export const getInstitutionScores = () =>
+  client.get('/institutions/scores').then((r) => r.data)
+
 export const getInstitution = (id) =>
   client.get(`/institutions/${id}`).then((r) => r.data)
 

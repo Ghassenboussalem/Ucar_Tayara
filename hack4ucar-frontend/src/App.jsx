@@ -40,6 +40,8 @@ export default function App() {
             <Route path="institutions/:id" element={<InstitutionDetailPage />} />
             <Route path="alerts" element={<AlertsPage />} />
             <Route path="reports" element={<ReportsPage />} />
+            <Route path="causal" element={<CausalGraphPage />} />
+            <Route path="map" element={<MapPage />} />
             <Route path="analytics" element={<PredictiveAnalyticsPage />} />
             <Route path="ingestion" element={<DataIngestionPage />} />
           </Route>
