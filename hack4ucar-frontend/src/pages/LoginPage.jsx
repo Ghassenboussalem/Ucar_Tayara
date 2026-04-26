@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login } from '../api/client'
+import { useLang } from '../contexts/LangContext'
+import { setSelectedInstitution } from '../utils/institutionFilter'
 
 export default function LoginPage() {
+  const { lang, toggleLang } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,9 +25,11 @@ export default function LoginPage() {
         full_name: data.full_name,
         institution_id: data.institution_id,
       }))
+      window.dispatchEvent(new Event('ucar_user_change'))
+      setSelectedInstitution(null)
       navigate('/dashboard')
     } catch {
-      setError('Email ou mot de passe incorrect.')
+      setError(tx('Email ou mot de passe incorrect.', 'البريد الإلكتروني أو كلمة المرور غير صحيحة.'))
     } finally {
       setLoading(false)
     }
@@ -49,17 +55,17 @@ export default function LoginPage() {
 
         <div style={styles.heroContent}>
           <h1 style={styles.heroTitle}>
-            La plateforme de pilotage universitaire de demain.
+            {tx('La plateforme de pilotage universitaire de demain.', 'منصة قيادة جامعية للغد.')}
           </h1>
           <p style={styles.heroSub}>
-            Centralisez, analysez et anticipez les données de vos 33 institutions en temps réel.
+            {tx('Centralisez, analysez et anticipez les données de 33 institutions — 30 000 étudiants, 3 000 personnels.', 'وحّد البيانات وحللها وتنبأ بمؤشرات 33 مؤسسة — 30,000 طالب و3,000 موظف.')}
           </p>
 
           <div style={styles.statGrid}>
             {[
-              { value: '33', label: 'Établissements' },
-              { value: '85k+', label: 'Étudiants suivis' },
-              { value: 'IA', label: 'Moteur prédictif' },
+              { value: '33', label: tx('Établissements', 'مؤسسة') },
+              { value: '30k+', label: tx('Étudiants suivis', 'طلاب متابعون') },
+              { value: '3k+', label: tx('Personnel', 'موظف') },
             ].map((s) => (
               <div key={s.label} style={styles.statCard}>
                 <span style={styles.statValue}>{s.value}</span>
@@ -69,26 +75,44 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p style={styles.leftFooter}>Université de Carthage — HACK4UCAR 2025</p>
+        <p style={styles.leftFooter}>{tx('Université de Carthage — HACK4UCAR 2025', 'جامعة قرطاج - HACK4UCAR 2025')}</p>
       </div>
 
       {/* Right panel — form */}
       <div style={styles.rightPanel}>
         <div style={styles.formCard}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+            <button
+              onClick={toggleLang}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '8px',
+                border: '1.5px solid #e2e8f0',
+                background: 'white',
+                color: '#374151',
+                fontSize: '0.74rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                fontFamily: 'Inter, sans-serif',
+              }}
+            >
+              {lang === 'fr' ? 'عربي' : 'FR'}
+            </button>
+          </div>
           <div style={styles.formHeader}>
-            <h2 style={styles.formTitle}>Connexion</h2>
-            <p style={styles.formSub}>Accédez à votre tableau de bord institutionnel</p>
+            <h2 style={styles.formTitle}>{tx('Connexion', 'تسجيل الدخول')}</h2>
+            <p style={styles.formSub}>{tx('Accédez à votre tableau de bord institutionnel', 'الوصول إلى لوحة القيادة المؤسسية')}</p>
           </div>
 
           {error && (
             <div style={styles.errorBanner}>
-              <span>⚠</span> {error}
+              <AlertTriangle size={16} /> {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} style={styles.form}>
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>Adresse email</label>
+              <label style={styles.label}>{tx('Adresse email', 'البريد الإلكتروني')}</label>
               <input
                 id="email"
                 type="email"
@@ -102,7 +126,7 @@ export default function LoginPage() {
             </div>
 
             <div style={styles.fieldGroup}>
-              <label style={styles.label}>Mot de passe</label>
+              <label style={styles.label}>{tx('Mot de passe', 'كلمة المرور')}</label>
               <input
                 id="password"
                 type="password"
@@ -123,18 +147,21 @@ export default function LoginPage() {
             >
               {loading ? (
                 <span style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
-                  <span className="spinner" /> Connexion…
+                  <span className="spinner" /> {tx('Connexion...', 'جار تسجيل الدخول...')}
                 </span>
-              ) : 'Se connecter →'}
+              ) : tx('Se connecter →', 'دخول ←')}
             </button>
           </form>
 
           <div style={styles.demoHint}>
-            <p style={{ color: '#64748b', fontSize: '0.78rem', marginBottom: '6px', fontWeight: 600 }}>Comptes de démo :</p>
+            <p style={{ color: '#64748b', fontSize: '0.78rem', marginBottom: '6px', fontWeight: 600 }}>{tx('Comptes de démo :', 'حسابات تجريبية:')}</p>
             {[
-              { email: 'president@ucar.rnu.tn', role: 'Président (vue globale)' },
-              { email: 'admin.fsegn@ucar.rnu.tn', role: 'Admin FSEG Nabeul' },
-              { email: 'admin.enstab@ucar.rnu.tn', role: 'Admin ENSTAB' },
+              { email: 'president@ucar.rnu.tn',    role: tx('👑 Présidence UCAR', '👑 رئاسة UCAR') },
+              { email: 'admin.fsegn@ucar.rnu.tn',  role: tx('🏛 Directeur FSEGN', '🏛 مدير FSEGN') },
+              { email: 'admin.enstab@ucar.rnu.tn', role: tx('🏛 Directeur ENSTAB', '🏛 مدير ENSTAB') },
+              { email: 'admin.essths@ucar.rnu.tn', role: tx('🏛 Directeur ESSTHS', '🏛 مدير ESSTHS') },
+              { email: 'viewer.ihec@ucar.rnu.tn',  role: tx('👁 Observateur IHEC', '👁 مراقب IHEC') },
+              { email: 'viewer.supcom@ucar.rnu.tn',role: tx('👁 Observateur SUPCOM', '👁 مراقب SUPCOM') },
             ].map((u) => (
               <button
                 key={u.email}
@@ -145,7 +172,7 @@ export default function LoginPage() {
                 <span style={{ color: '#94a3b8' }}>— {u.role}</span>
               </button>
             ))}
-            <p style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: '6px' }}>Mot de passe universel : <code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>demo1234</code></p>
+            <p style={{ color: '#94a3b8', fontSize: '0.72rem', marginTop: '6px' }}>{tx('Mot de passe universel : ', 'كلمة المرور الموحدة: ')}<code style={{ background: '#f1f5f9', padding: '1px 6px', borderRadius: '4px' }}>demo1234</code></p>
           </div>
         </div>
       </div>

@@ -1,0 +1,31 @@
+student_id,full_name,module,grade,enrolled,status
+STU001,Ahmed Ben Ali,Mathématiques,12.5,1,passed
+STU002,Sarra Mansouri,Mathématiques,8.0,1,failed
+STU003,Khalil Trabelsi,Mathématiques,6.5,1,failed
+STU004,Nour Hamdi,Mathématiques,14.0,1,passed
+STU005,Youssef Belhaj,Mathématiques,5.0,1,failed
+STU006,Ines Chaabane,Mathématiques,9.5,1,failed
+STU007,Omar Sfar,Mathématiques,7.0,1,failed
+STU008,Fatma Jomaa,Mathématiques,11.0,1,passed
+STU009,Rim Karray,Mathématiques,4.5,1,failed
+STU010,Hedi Bouzid,Mathématiques,13.0,1,passed
+STU011,Meriem Gharbi,Physique,10.5,1,passed
+STU012,Amine Jerbi,Physique,7.5,1,failed
+STU013,Donia Nasr,Physique,6.0,1,failed
+STU014,Tarek Mrad,Physique,8.5,1,failed
+STU015,Sirine Dridi,Physique,15.0,1,passed
+STU016,Bilel Zouari,Physique,5.5,1,failed
+STU017,Hajer Laabidi,Physique,9.0,1,failed
+STU018,Rami Ferjani,Physique,4.0,1,failed
+STU019,Lina Boubaker,Physique,11.5,1,passed
+STU020,Maher Souli,Physique,7.0,1,failed
+STU021,Cyrine Haj Salem,Informatique,16.0,1,passed
+STU022,Nizar Mzoughi,Informatique,8.0,1,failed
+STU023,Asma Rekik,Informatique,6.5,1,failed
+STU024,Lotfi Hamrouni,Informatique,5.0,1,failed
+STU025,Wafa Ben Salah,Informatique,13.5,1,passed
+STU026,Chokri Ayari,Informatique,7.5,1,failed
+STU027,Sonia Ben Hmida,Informatique,4.5,1,failed
+STU028,Firas Khelifi,Informatique,9.5,1,failed
+STU029,Olfa Ben Rejeb,Informatique,12.0,1,passed
+STU030,Karim Souissi,Informatique,6.0,1,failed

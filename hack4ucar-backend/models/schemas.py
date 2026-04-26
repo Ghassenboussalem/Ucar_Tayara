@@ -137,13 +137,29 @@ class UserOut(BaseModel):
 
 
 # ─── AI Chat ──────────────────────────────────────────────────
+class ChatHistoryItem(BaseModel):
+    role: str   # 'user' | 'assistant'
+    content: str
+
 class ChatMessage(BaseModel):
     message: str
-    institution_id: Optional[int] = None  # None = presidency context
+    history: List[ChatHistoryItem] = []
+    institution_id: Optional[int] = None
+
+class NavigationAction(BaseModel):
+    page: str
+    route: str
+    institution_id: Optional[int] = None
+    reason: str
 
 class ChatResponse(BaseModel):
     response: str
+    navigation: Optional[NavigationAction] = None
+    actions: Optional[List[str]] = None
+    agent_used: Optional[str] = None
     context_used: Optional[str] = None
+    blocked: Optional[bool] = None
+    block_reason: Optional[str] = None
 
 
 # ─── Report ───────────────────────────────────────────────────
@@ -152,6 +168,7 @@ class ReportRequest(BaseModel):
     report_type: str  # 'monthly', 'semester', 'annual'
     period: str       # e.g. 'S1_2023', '2023'
     format: str       # 'pdf', 'excel'
+    lang: str = "fr"  # 'fr' | 'ar'
 
 
 # ─── Dashboard Summary ────────────────────────────────────────

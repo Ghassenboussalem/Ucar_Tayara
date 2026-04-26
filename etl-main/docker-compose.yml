@@ -1,0 +1,44 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=UCAR ETL Platform
+      - APP_VERSION=0.2.0
+      - DB_URL=sqlite:////app/data/ucar_etl.db
+      - UPLOADS_DIR=/app/data/uploads
+      - QUEUE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_QUEUE_NAME=ingestion
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data  # Shared data volume
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.worker"]
+    environment:
+      - APP_NAME=UCAR ETL Platform
+      - APP_VERSION=0.2.0
+      - DB_URL=sqlite:////app/data/ucar_etl.db
+      - UPLOADS_DIR=/app/data/uploads
+      - QUEUE_BACKEND=redis
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_QUEUE_NAME=ingestion
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data  # Shared data volume
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

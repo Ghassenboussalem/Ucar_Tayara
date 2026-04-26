@@ -2,9 +2,16 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, ResponsiveContainer, Tooltip } from 'recharts'
 import { getDashboard, getAlerts, resolveAlert, explainAlert } from '../api/client'
-import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical } from 'lucide-react'
+import { Building2, Users, Bell, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, ChevronRight, ChevronLeft, Sparkles, RefreshCw, Brain, ArrowUpRight, ArrowDownRight, FlaskConical, Lightbulb, GraduationCap, DollarSign, Bot } from 'lucide-react'
 import client from '../api/client'
 import WhatIfPanel from '../components/WhatIfPanel'
+import { getSelectedInstitution } from '../utils/institutionFilter'
+import { useLang } from '../contexts/LangContext'
+
+const TOTAL_STUDENTS_DISPLAY = 31500
+const PAGE_SIZE = 5
+
+const PRED_ICON_MAP = { pred_dropout: GraduationCap, pred_budget: DollarSign, pred_load: Users }
 
 // Mini sparkline data helper
 function mkSpark(base, n = 8) {
@@ -63,23 +70,27 @@ function HealthBar({ score }) {
   )
 }
 
-function SeverityBadge({ severity }) {
-  const map = { critical: { label: 'Critique', bg: '#fef2f2', color: '#dc2626' }, warning: { label: 'Attention', bg: '#fffbeb', color: '#d97706' }, info: { label: 'Info', bg: '#eff6ff', color: '#2563eb' } }
+function SeverityBadge({ severity, labels }) {
+  const map = {
+    critical: { label: labels?.critical || 'Critique', bg: '#fef2f2', color: '#dc2626' },
+    warning: { label: labels?.warning || 'Attention', bg: '#fffbeb', color: '#d97706' },
+    info: { label: labels?.info || 'Info', bg: '#eff6ff', color: '#2563eb' },
+  }
   const s = map[severity] || map.info
   return <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, background: s.bg, color: s.color }}>{s.label}</span>
 }
 
-function PredictionCard({ pred }) {
+function PredictionCard({ pred, confidenceLabel, simulateLabel }) {
   const sevColors = { critical: '#dc2626', warning: '#f59e0b', info: '#3b82f6' }
   const color = sevColors[pred.severity] || '#3b82f6'
   return (
     <div style={{ background: 'white', borderRadius: '12px', padding: '18px', border: '1px solid #e2e8f0', borderLeft: `4px solid ${color}`, display: 'flex', flexDirection: 'column', gap: '10px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '1.2rem' }}>{pred.icon}</span>
+          {(() => { const Icon = PRED_ICON_MAP[pred.id]; return Icon ? <Icon size={18} color={color} /> : null })()}
           <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0f172a' }}>{pred.title}</span>
         </div>
-        <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: color + '12', color }}>{pred.confidence}% confiance</span>
+        <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: color + '12', color }}>{pred.confidence}% {confidenceLabel}</span>
       </div>
       <div style={{ display: 'flex', gap: '16px', alignItems: 'baseline' }}>
         <div>
@@ -95,12 +106,12 @@ function PredictionCard({ pred }) {
           </div>
         </div>
       </div>
-      <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5, background: '#f8fafc', padding: '8px 10px', borderRadius: '6px' }}>
-        💡 {pred.explanation}
+      <div style={{ fontSize: '0.75rem', color: '#64748b', lineHeight: 1.5, background: '#f8fafc', padding: '8px 10px', borderRadius: '6px', display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+        <Lightbulb size={13} style={{ flexShrink: 0, marginTop: '1px', color: '#f59e0b' }} /> {pred.explanation}
       </div>
       {pred.onSimulate && (
         <button onClick={pred.onSimulate} style={{ marginTop: '8px', padding: '5px 12px', borderRadius: '7px', border: '1px solid rgba(29,83,148,0.2)', background: 'rgba(29,83,148,0.05)', color: 'rgb(29,83,148)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', fontFamily: 'Inter,sans-serif', display: 'flex', alignItems: 'center', gap: '5px', width: '100%', justifyContent: 'center' }}>
-          <FlaskConical size={13} /> Simuler une intervention
+          <FlaskConical size={13} /> {simulateLabel}
         </button>
       )}
     </div>
@@ -108,6 +119,8 @@ function PredictionCard({ pred }) {
 }
 
 export default function DashboardPage() {
+  const { lang, t } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
   const [dash, setDash] = useState(null)
   const [alerts, setAlerts] = useState([])
@@ -116,6 +129,14 @@ export default function DashboardPage() {
   const [explanation, setExplanation] = useState({})
   const [whatIfScenario, setWhatIfScenario] = useState(null)
   const [explaining, setExplaining] = useState({})
+  const [selectedInst, setSelectedInst] = useState(() => getSelectedInstitution())
+  const [instPage, setInstPage] = useState(0)
+
+  const severityLabels = {
+    critical: t('sev.critical'),
+    warning: t('sev.warning'),
+    info: t('sev.info'),
+  }
 
   async function load() {
     setLoading(true)
@@ -130,6 +151,16 @@ export default function DashboardPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Sync with institution switcher in TopBar
+  useEffect(() => {
+    function handler() {
+      setSelectedInst(getSelectedInstitution())
+      setInstPage(0)
+    }
+    window.addEventListener('ucar_inst_change', handler)
+    return () => window.removeEventListener('ucar_inst_change', handler)
+  }, [])
 
   async function handleExplain(id) {
     setExplaining((p) => ({ ...p, [id]: true }))
@@ -149,14 +180,26 @@ export default function DashboardPage() {
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh', flexDirection: 'column', gap: '16px' }}>
       <div className="spinner" style={{ border: '3px solid #e2e8f0', borderTopColor: 'rgb(29,83,148)', width: '36px', height: '36px' }} />
-      <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>Chargement du tableau de bord…</p>
+      <p style={{ color: '#94a3b8', fontSize: '0.85rem' }}>{tx('Chargement du tableau de bord...', 'جاري تحميل لوحة القيادة...')}</p>
     </div>
   )
 
-  const totalStudents = dash?.total_students || 0
-  const totalInst = dash?.total_institutions || 0
-  const activeAlerts = dash?.active_alerts || 0
+  const allInstitutions = dash?.institutions || []
+  const displayInstitutions = selectedInst
+    ? allInstitutions.filter((i) => i.id === selectedInst.id)
+    : allInstitutions
+
+  const totalPages = Math.ceil(displayInstitutions.length / PAGE_SIZE)
+  const pagedInstitutions = displayInstitutions.slice(instPage * PAGE_SIZE, (instPage + 1) * PAGE_SIZE)
+
+  const totalInst = selectedInst ? displayInstitutions.length : (dash?.total_institutions || 0)
+  const activeAlerts = selectedInst
+    ? (displayInstitutions[0]?.active_alerts || 0)
+    : (dash?.active_alerts || 0)
   const avgSuccess = dash?.avg_success_rate || 0
+  const totalStudents = selectedInst
+    ? (displayInstitutions[0]?.student_capacity || 0)
+    : TOTAL_STUDENTS_DISPLAY
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', animation: 'fadeInUp 0.35s ease both' }}>
@@ -167,9 +210,9 @@ export default function DashboardPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', position: 'relative' }}>
           <div style={S.bannerIcon}><Sparkles size={20} /></div>
           <div>
-            <p style={S.bannerTitle}>Synthèse IA — Réseau UCAR</p>
+            <p style={S.bannerTitle}>{tx('Synthèse IA — Réseau UCAR', 'ملخص الذكاء الاصطناعي - شبكة UCAR')}</p>
             <p style={S.bannerText}>
-              {totalInst} institutions actives · {totalStudents.toLocaleString('fr-FR')} étudiants suivis · Taux de réussite moyen <strong>{avgSuccess}%</strong> · {activeAlerts} alertes en attente
+              {totalInst} {tx('institutions actives', 'مؤسسات نشطة')} · {totalStudents.toLocaleString('fr-FR')} {tx('étudiants suivis', 'طالب متابع')} · {tx('Taux de réussite moyen', 'معدل النجاح المتوسط')} <strong>{avgSuccess}%</strong> · {activeAlerts} {tx('alertes en attente', 'تنبيهات قيد الانتظار')}
             </p>
           </div>
         </div>
@@ -177,10 +220,10 @@ export default function DashboardPage() {
 
       {/* KPI Cards */}
       <div style={S.kpiGrid}>
-        <StatCard icon={Building2} label="Institutions actives" value={totalInst} sub="Réseau UCAR complet" color="rgb(29,83,148)" spark={mkSpark(totalInst)} />
-        <StatCard icon={Users} label="Étudiants suivis" value={(totalStudents / 1000).toFixed(1) + 'k'} sub="Capacité totale" color="#0891b2" spark={mkSpark(totalStudents)} />
-        <StatCard icon={TrendingUp} label="Taux de réussite moy." value={avgSuccess + '%'} sub="vs réseau" color="#059669" spark={mkSpark(avgSuccess)} delta={1.7} deltaUnit="pts" />
-        <StatCard icon={Bell} label="Alertes actives" value={activeAlerts} sub={`dont ${dash?.critical_alerts || 0} critiques`} color={activeAlerts > 3 ? '#dc2626' : '#f59e0b'} spark={mkSpark(activeAlerts + 2)} />
+        <StatCard icon={Building2} label={tx('Institutions actives', 'المؤسسات النشطة')} value={totalInst} sub={tx('Réseau UCAR complet', 'شبكة UCAR الكاملة')} color="rgb(29,83,148)" spark={mkSpark(totalInst)} />
+        <StatCard icon={Users} label={tx('Étudiants suivis', 'الطلاب المتابعون')} value={(totalStudents / 1000).toFixed(1) + 'k'} sub={tx('Capacité totale', 'السعة الإجمالية')} color="#0891b2" spark={mkSpark(totalStudents)} />
+        <StatCard icon={TrendingUp} label={tx('Taux de réussite moy.', 'متوسط معدل النجاح')} value={avgSuccess + '%'} sub={tx('vs réseau', 'مقارنة بالشبكة')} color="#059669" spark={mkSpark(avgSuccess)} delta={1.7} deltaUnit={tx('pts', 'نقطة')} />
+        <StatCard icon={Bell} label={tx('Alertes actives', 'التنبيهات النشطة')} value={activeAlerts} sub={tx(`dont ${dash?.critical_alerts || 0} critiques`, `منها ${dash?.critical_alerts || 0} حرجة`)} color={activeAlerts > 3 ? '#dc2626' : '#f59e0b'} spark={mkSpark(activeAlerts + 2)} />
       </div>
 
       {/* Predictions Panel */}
@@ -188,14 +231,21 @@ export default function DashboardPage() {
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
             <Brain size={18} color="rgb(29,83,148)" />
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>Prévisions IA</h3>
-            <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)' }}>Prédictif</span>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>{tx('Prévisions IA', 'تنبؤات الذكاء الاصطناعي')}</h3>
+            <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.68rem', fontWeight: 700, background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)' }}>{tx('Prédictif', 'تنبؤي')}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
             {predictions.map((p) => {
               const scenarioMap = { pred_dropout: 'dropout', pred_budget: 'budget' }
               const scenario = scenarioMap[p.id]
-              return <PredictionCard key={p.id} pred={{ ...p, onSimulate: scenario ? () => setWhatIfScenario(scenario) : undefined }} />
+              return (
+                <PredictionCard
+                  key={p.id}
+                  pred={{ ...p, onSimulate: scenario ? () => setWhatIfScenario(scenario) : undefined }}
+                  confidenceLabel={tx('confiance', 'ثقة')}
+                  simulateLabel={tx('Simuler une intervention', 'محاكاة تدخل')}
+                />
+              )
             })}
           </div>
         </div>
@@ -206,20 +256,20 @@ export default function DashboardPage() {
         {/* Institutions table */}
         <div style={{ ...S.panel, flex: 1.6 }}>
           <div style={S.panelHeader}>
-            <h3 style={S.panelTitle}>État des institutions</h3>
+            <h3 style={S.panelTitle}>{tx('État des institutions', 'وضع المؤسسات')}</h3>
             <button style={S.refreshBtn} onClick={load}><RefreshCw size={14} /></button>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={S.table}>
               <thead>
                 <tr>
-                  {['Institution', 'Gouvernorat', 'Étudiants', 'Alertes', 'Score santé', ''].map((h) => (
+                  {[tx('Institution', 'المؤسسة'), tx('Gouvernorat', 'الولاية'), tx('Étudiants', 'الطلاب'), tx('Alertes', 'التنبيهات'), tx('Score santé', 'مؤشر الصحة'), ''].map((h) => (
                     <th key={h} style={S.th}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {(dash?.institutions || []).map((inst) => (
+                {pagedInstitutions.map((inst) => (
                   <tr key={inst.id} style={S.tr}>
                     <td style={S.td}>
                       <div style={{ fontWeight: 600, color: '#0f172a', fontSize: '0.82rem' }}>{inst.name_fr}</div>
@@ -230,7 +280,7 @@ export default function DashboardPage() {
                     <td style={S.td}>
                       {inst.active_alerts > 0
                         ? <span style={{ padding: '2px 8px', borderRadius: '99px', background: '#fef2f2', color: '#dc2626', fontSize: '0.72rem', fontWeight: 700 }}>{inst.active_alerts}</span>
-                        : <span style={{ color: '#22c55e', fontSize: '0.72rem' }}>✓ OK</span>
+                        : <span style={{ color: '#22c55e', fontSize: '0.72rem' }}>✓ {tx('OK', 'سليم')}</span>
                       }
                     </td>
                     <td style={{ ...S.td, minWidth: '140px' }}>
@@ -246,24 +296,47 @@ export default function DashboardPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 4px 0', borderTop: '1px solid #f1f5f9', marginTop: '4px' }}>
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>
+                {instPage * PAGE_SIZE + 1}-{Math.min((instPage + 1) * PAGE_SIZE, displayInstitutions.length)} {tx('sur', 'من')} {displayInstitutions.length}
+              </span>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button
+                  style={{ ...S.detailBtn, opacity: instPage === 0 ? 0.35 : 1 }}
+                  disabled={instPage === 0}
+                  onClick={() => setInstPage((p) => p - 1)}
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <button
+                  style={{ ...S.detailBtn, opacity: instPage >= totalPages - 1 ? 0.35 : 1 }}
+                  disabled={instPage >= totalPages - 1}
+                  onClick={() => setInstPage((p) => p + 1)}
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Alerts feed */}
         <div style={{ ...S.panel, flex: 1, minWidth: '300px' }}>
           <div style={S.panelHeader}>
-            <h3 style={S.panelTitle}>Alertes récentes</h3>
+            <h3 style={S.panelTitle}>{tx('Alertes récentes', 'أحدث التنبيهات')}</h3>
             <button style={{ ...S.detailBtn, fontSize: '0.75rem', padding: '4px 10px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => navigate('/alerts')}>
-              Voir tout <ChevronRight size={12} />
+              {tx('Voir tout', 'عرض الكل')} <ChevronRight size={12} />
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            {alerts.length === 0 && <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '32px' }}>✅ Aucune alerte active</p>}
+            {alerts.length === 0 && <p style={{ color: '#94a3b8', fontSize: '0.82rem', textAlign: 'center', padding: '32px' }}>✅ {tx('Aucune alerte active', 'لا توجد تنبيهات نشطة')}</p>}
             {alerts.map((a) => (
               <div key={a.id} style={S.alertCard}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '8px' }}>
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                      <SeverityBadge severity={a.severity} />
+                      <SeverityBadge severity={a.severity} labels={severityLabels} />
                       <span style={{ fontSize: '0.68rem', color: '#94a3b8' }}>{a.institution_name}</span>
                     </div>
                     <p style={{ fontSize: '0.78rem', fontWeight: 600, color: '#1e293b', lineHeight: 1.4 }}>{a.title}</p>
@@ -276,10 +349,10 @@ export default function DashboardPage() {
                 )}
                 <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
                   <button style={S.alertBtnExplain} onClick={() => handleExplain(a.id)} disabled={explaining[a.id]}>
-                    {explaining[a.id] ? '…' : '🤖 Expliquer'}
+                    {explaining[a.id] ? '...' : `🤖 ${tx('Expliquer', 'شرح')}`}
                   </button>
                   <button style={S.alertBtnResolve} onClick={() => handleResolve(a.id)}>
-                    <CheckCircle size={12} /> Résoudre
+                    <CheckCircle size={12} /> {tx('Résoudre', 'حل')}
                   </button>
                 </div>
               </div>
@@ -317,4 +390,6 @@ const S = {
   alertCard: { padding: '12px', borderRadius: '10px', border: '1px solid #f1f5f9', background: '#fafbff' },
   alertBtnExplain: { padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0', background: 'white', fontSize: '0.72rem', color: '#374151', cursor: 'pointer', fontFamily: 'Inter, sans-serif' },
   alertBtnResolve: { padding: '4px 10px', borderRadius: '6px', border: 'none', background: 'rgba(39,174,96,0.1)', fontSize: '0.72rem', color: '#16a34a', cursor: 'pointer', fontFamily: 'Inter, sans-serif', display: 'flex', alignItems: 'center', gap: '4px' },
+  pageBtn: { width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, fontFamily: 'Inter, sans-serif', transition: 'all 150ms' },
+  pageBtnActive: { background: 'rgb(29,83,148)', color: 'white', border: '1px solid rgb(29,83,148)' },
 }

@@ -1,8 +1,50 @@
+# ── Dependencies ──────────────────────────────────────────────
 node_modules/
 venv/
-__pycache__/
-*.pyc
-.env
-.env.*
+.venv/
+
+# ── Build artifacts ───────────────────────────────────────────
 dist/
 build/
+*.egg-info/
+
+# ── Python cache ──────────────────────────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# ── Environment / secrets ─────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Databases ─────────────────────────────────────────────────
+*.db
+*.db.backup
+*.sqlite3
+
+# ── Uploads / generated files ─────────────────────────────────
+etl-main/backend/uploads/
+rag_dataset/chroma_db/
+
+# ── macOS metadata ────────────────────────────────────────────
+._*
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ── Editor / IDE ──────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Scratch files ─────────────────────────────────────────────
+test.py
+scratch/

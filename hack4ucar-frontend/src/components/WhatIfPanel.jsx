@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X, FlaskConical, TrendingDown, Zap, ChevronRight } from 'lucide-react'
+import { useLang } from '../contexts/LangContext'
 
 // Pre-computed scenarios from context/13-demo-data-strategy.md
 const SCENARIOS = {
@@ -87,6 +88,8 @@ const SCENARIOS = {
 }
 
 export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
+  const { lang } = useLang()
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const data = SCENARIOS[scenario] || SCENARIOS.dropout
   const [selected, setSelected] = useState(null)
   const active = selected != null ? data.interventions[selected] : null
@@ -99,7 +102,7 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={S.headerIcon}><FlaskConical size={18} /></div>
             <div>
-              <div style={S.headerTitle}>Simulation d'impact</div>
+              <div style={S.headerTitle}>{tx("Simulation d'impact", 'محاكاة الأثر')}</div>
               <div style={S.headerSub}>{data.title}</div>
             </div>
           </div>
@@ -109,7 +112,7 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
         {/* Current state */}
         <div style={S.stateRow}>
           <div style={S.stateBox}>
-            <div style={S.stateLabel}>Valeur actuelle</div>
+            <div style={S.stateLabel}>{tx('Valeur actuelle', 'القيمة الحالية')}</div>
             <div style={S.stateValue}>{data.current}{data.unit}</div>
           </div>
           <div style={{ color: '#94a3b8', fontSize: '1.4rem', display: 'flex', alignItems: 'center' }}>→</div>
@@ -123,7 +126,7 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
         <div style={{ padding: '0 24px 16px' }}>
           <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#374151', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
             <Zap size={13} style={{ display: 'inline', verticalAlign: '-2px', marginRight: '4px' }} />
-            Interventions disponibles
+            {tx('Interventions disponibles', 'التدخلات المتاحة')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {data.interventions.map((intv, idx) => (
@@ -154,34 +157,34 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
           <div style={S.resultPanel}>
             <div style={{ display: 'flex', gap: '20px', alignItems: 'center', marginBottom: '14px' }}>
               <div>
-                <div style={{ fontSize: '0.68rem', color: '#059669', fontWeight: 600, textTransform: 'uppercase' }}>Résultat simulé</div>
+                <div style={{ fontSize: '0.68rem', color: '#059669', fontWeight: 600, textTransform: 'uppercase' }}>{tx('Résultat simulé', 'النتيجة المتوقعة')}</div>
                 <div style={{ fontSize: '2rem', fontWeight: 800, color: '#059669', letterSpacing: '-0.04em' }}>
                   {active.result}{data.unit}
                 </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={S.resultTag}>
-                  <TrendingDown size={12} /> {active.delta > 0 ? '+' : ''}{active.delta}{data.unit} vs baseline
+                  <TrendingDown size={12} /> {active.delta > 0 ? '+' : ''}{active.delta}{data.unit} {tx('vs baseline', 'مقارنة بخط الأساس')}
                 </div>
                 <div style={{ ...S.resultTag, background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)' }}>
-                  🎯 Confiance: {active.confidence}%
+                  🎯 {tx('Confiance', 'الثقة')}: {active.confidence}%
                 </div>
                 <div style={{ ...S.resultTag, background: '#fef9c3', color: '#a16207' }}>
-                  ⏱ Délai d'effet: {active.delay}
+                  ⏱ {tx("Délai d'effet", 'مدة التأثير')}: {active.delay}
                 </div>
               </div>
             </div>
-            <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              💡 {active.detail}
+            <div style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.6, background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'flex-start', gap: '7px' }}>
+              <Lightbulb size={14} style={{ flexShrink: 0, marginTop: '2px', color: '#f59e0b' }} /> {active.detail}
             </div>
 
             {/* Comparison bar */}
             <div style={{ marginTop: '14px' }}>
-              <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, marginBottom: '6px' }}>COMPARAISON VISUELLE</div>
+              <div style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, marginBottom: '6px' }}>{tx('COMPARAISON VISUELLE', 'مقارنة مرئية')}</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <CompBar label="Sans action" value={data.baseline_forecast} max={Math.max(data.baseline_forecast, data.current) * 1.1} color="#dc2626" unit={data.unit} />
-                <CompBar label="Avec intervention" value={active.result} max={Math.max(data.baseline_forecast, data.current) * 1.1} color="#059669" unit={data.unit} />
-                <CompBar label="Actuel" value={data.current} max={Math.max(data.baseline_forecast, data.current) * 1.1} color="rgb(29,83,148)" unit={data.unit} />
+                <CompBar label={tx('Sans action', 'بدون إجراء')} value={data.baseline_forecast} max={Math.max(data.baseline_forecast, data.current) * 1.1} color="#dc2626" unit={data.unit} />
+                <CompBar label={tx('Avec intervention', 'مع تدخل')} value={active.result} max={Math.max(data.baseline_forecast, data.current) * 1.1} color="#059669" unit={data.unit} />
+                <CompBar label={tx('Actuel', 'الحالي')} value={data.current} max={Math.max(data.baseline_forecast, data.current) * 1.1} color="rgb(29,83,148)" unit={data.unit} />
               </div>
             </div>
           </div>
@@ -189,10 +192,10 @@ export default function WhatIfPanel({ scenario = 'dropout', onClose }) {
 
         {/* Footer */}
         <div style={S.footer}>
-          <button style={S.footerBtnSecondary} onClick={onClose}>Fermer</button>
+          <button style={S.footerBtnSecondary} onClick={onClose}>{tx('Fermer', 'إغلاق')}</button>
           {active && (
             <button style={S.footerBtnPrimary}>
-              📄 Générer rapport d'impact
+              📄 {tx("Générer rapport d'impact", 'إنشاء تقرير الأثر')}
             </button>
           )}
         </div>

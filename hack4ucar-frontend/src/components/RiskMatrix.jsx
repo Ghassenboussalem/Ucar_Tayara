@@ -7,13 +7,8 @@ const SEVERITY_COLORS = {
   ok: '#22c55e',
 }
 
-const SEVERITY_LABELS = {
-  critical: 'Critique',
-  warning: 'Avertissement',
-  ok: 'Normal',
-}
-
-function CustomTooltip({ active, payload }) {
+function CustomTooltip({ active, payload, lang = 'fr' }) {
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   if (!active || !payload?.length) return null
   const d = payload[0]?.payload
   if (!d) return null
@@ -24,30 +19,31 @@ function CustomTooltip({ active, payload }) {
       <div style={{ color: '#64748b', marginBottom: '6px', fontSize: '0.72rem' }}>{d.name}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-          <span style={{ color: '#94a3b8' }}>Probabilité</span>
+          <span style={{ color: '#94a3b8' }}>{tx('Probabilité', 'الاحتمال')}</span>
           <span style={{ fontWeight: 700, color }}>{d.probability}%</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-          <span style={{ color: '#94a3b8' }}>Étudiants</span>
+          <span style={{ color: '#94a3b8' }}>{tx('Étudiants', 'الطلاب')}</span>
           <span style={{ fontWeight: 700 }}>{d.impact?.toLocaleString('fr-FR')}</span>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px' }}>
-          <span style={{ color: '#94a3b8' }}>Taux abandon</span>
+          <span style={{ color: '#94a3b8' }}>{tx('Taux abandon', 'معدل الانقطاع')}</span>
           <span style={{ fontWeight: 700, color }}>{d.dropout_rate}%</span>
         </div>
       </div>
       <div style={{ marginTop: '6px', padding: '3px 8px', borderRadius: '4px', background: color + '15', color, fontSize: '0.68rem', fontWeight: 700, textAlign: 'center' }}>
-        {SEVERITY_LABELS[d.severity]}
+        {d.severity === 'critical' ? tx('Critique', 'حرج') : d.severity === 'warning' ? tx('Avertissement', 'تحذير') : tx('Normal', 'عادي')}
       </div>
     </div>
   )
 }
 
-export default function RiskMatrix({ data = [], onSelect }) {
+export default function RiskMatrix({ data = [], onSelect, lang = 'fr' }) {
+  const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   if (!data.length) {
     return (
       <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontSize: '0.82rem' }}>
-        Chargement de la matrice de risque…
+        {tx('Chargement de la matrice de risque...', 'جاري تحميل مصفوفة المخاطر...')}
       </div>
     )
   }
@@ -62,17 +58,17 @@ export default function RiskMatrix({ data = [], onSelect }) {
       {/* Legend + summary */}
       <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
         {[
-          { label: 'Critique', count: critical.length, color: '#dc2626', Icon: AlertTriangle },
-          { label: 'Avertissement', count: warning.length, color: '#f59e0b', Icon: Info },
-          { label: 'Normal', count: ok.length, color: '#22c55e', Icon: CheckCircle },
+          { label: tx('Critique', 'حرج'), count: critical.length, color: '#dc2626', Icon: AlertTriangle },
+          { label: tx('Avertissement', 'تحذير'), count: warning.length, color: '#f59e0b', Icon: Info },
+          { label: tx('Normal', 'عادي'), count: ok.length, color: '#22c55e', Icon: CheckCircle },
         ].map(({ label, count, color, Icon }) => (
           <div key={label} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 12px', borderRadius: '8px', background: color + '10', border: `1px solid ${color}30` }}>
             <Icon size={13} color={color} />
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color }}>{count} {label}{count > 1 ? 's' : ''}</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color }}>{count} {label}</span>
           </div>
         ))}
         <div style={{ marginLeft: 'auto', fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center' }}>
-          Taille du point = effectif étudiant
+          {tx('Taille du point = effectif étudiant', 'حجم النقطة = عدد الطلبة')}
         </div>
       </div>
 
@@ -81,23 +77,23 @@ export default function RiskMatrix({ data = [], onSelect }) {
         <ScatterChart margin={{ top: 10, right: 20, left: 0, bottom: 20 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
           <XAxis
-            type="number" dataKey="probability" name="Probabilité"
+            type="number" dataKey="probability" name={tx('Probabilité', 'الاحتمال')}
             domain={[0, 100]} unit="%"
             tick={{ fontSize: 10, fill: '#94a3b8' }}
-            label={{ value: 'Probabilité de dégradation', position: 'insideBottom', offset: -10, fontSize: 11, fill: '#64748b' }}
+            label={{ value: tx('Probabilité de dégradation', 'احتمال التدهور'), position: 'insideBottom', offset: -10, fontSize: 11, fill: '#64748b' }}
           />
           <YAxis
-            type="number" dataKey="impact" name="Impact"
+            type="number" dataKey="impact" name={tx('Impact', 'الأثر')}
             tick={{ fontSize: 10, fill: '#94a3b8' }}
             tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}
-            label={{ value: 'Étudiants concernés', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: '#64748b' }}
+            label={{ value: tx('Étudiants concernés', 'عدد الطلبة المعنيين'), angle: -90, position: 'insideLeft', offset: 10, fontSize: 11, fill: '#64748b' }}
           />
           <ZAxis type="number" dataKey="impact" range={[40, 200]} />
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<CustomTooltip lang={lang} />} />
 
           {/* Risk quadrant dividers */}
           <ReferenceLine x={50} stroke="#e2e8f0" strokeDasharray="4 2"
-            label={{ value: 'Zone à risque →', position: 'insideTopLeft', fontSize: 9, fill: '#dc2626', dy: -4 }} />
+            label={{ value: tx('Zone à risque →', 'منطقة خطرة ←'), position: 'insideTopLeft', fontSize: 9, fill: '#dc2626', dy: -4 }} />
           <ReferenceLine y={maxImpact * 0.4} stroke="#e2e8f0" strokeDasharray="4 2" />
 
           <Scatter data={data} cursor={onSelect ? 'pointer' : 'default'} onClick={onSelect}>
@@ -111,7 +107,7 @@ export default function RiskMatrix({ data = [], onSelect }) {
       {/* Top risk table */}
       <div>
         <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
-          Top 5 institutions à risque élevé
+          {tx('Top 5 institutions à risque élevé', 'أعلى 5 مؤسسات عالية المخاطر')}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
           {data.slice(0, 5).map((d) => (
@@ -119,8 +115,8 @@ export default function RiskMatrix({ data = [], onSelect }) {
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: SEVERITY_COLORS[d.severity], flexShrink: 0 }} />
               <span style={{ fontWeight: 700, color: '#0f172a', fontSize: '0.8rem', minWidth: '52px' }}>{d.code}</span>
               <span style={{ flex: 1, fontSize: '0.75rem', color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: SEVERITY_COLORS[d.severity] }}>{d.probability}% prob.</span>
-              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{d.dropout_rate}% abandon</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: SEVERITY_COLORS[d.severity] }}>{d.probability}% {tx('prob.', 'احتمال')}</span>
+              <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{d.dropout_rate}% {tx('abandon', 'انقطاع')}</span>
             </div>
           ))}
         </div>

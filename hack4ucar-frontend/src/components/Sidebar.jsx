@@ -6,81 +6,82 @@ import {
   FileText,
   LogOut,
   ChevronRight,
+  ChevronLeft,
   TrendingUp,
   Lock,
+  Network,
+  Map,
   Brain,
-  FlaskConical,
-  Handshake,
-  HeartPulse,
-  HardHat,
-  Cpu,
-  Package,
-  BookOpen,
-  Leaf,
-  Target,
-  Truck,
-  GraduationCap,
-  ClipboardList,
+  DatabaseZap,
 } from 'lucide-react'
+import { useLang } from '../contexts/LangContext'
+import { useAuth } from '../contexts/AuthContext'
 
+// roles: which roles can see this item (undefined = all)
 const NAV = [
   {
-    section: 'Vue d\'ensemble',
+    sectionKey: 'nav.overview',
     items: [
-      { to: '/dashboard', icon: LayoutDashboard, label: 'Tableau de bord' },
+      { to: '/dashboard', icon: LayoutDashboard, labelKey: 'nav.dashboard' },
     ],
   },
   {
-    section: 'Données',
+    sectionKey: 'nav.data',
     items: [
-      { to: '/institutions', icon: Building2, label: 'Institutions' },
-      { to: '/alerts', icon: Bell, label: 'Alertes', badge: true },
+      { to: '/institutions', icon: Building2, labelKey: 'nav.institutions' },
+      { to: '/map', icon: Map, labelKey: 'nav.map' },
+      { to: '/alerts', icon: Bell, labelKey: 'nav.alerts', badge: true },
     ],
   },
   {
-    section: 'Intelligence',
+    sectionKey: 'nav.intelligence',
     items: [
-      { to: '/reports', icon: FileText, label: 'Rapports' },
-      { to: '/analytics', icon: Brain, label: 'Analytique prédictive' },
+      { to: '/reports', icon: FileText, labelKey: 'nav.reports' },
+      { to: '/causal', icon: Network, labelKey: 'nav.causal', roles: ['presidency'] },
+      { to: '/analytics', icon: Brain, labelKey: 'nav.analytics', roles: ['presidency'] },
+      { to: '/ingestion', icon: DatabaseZap, labelKey: 'nav.ingestion', roles: ['presidency', 'institution_admin'] },
     ],
   },
 ]
 
-const COMING_SOON_MODULES = [
-  { icon: FlaskConical, label: 'Recherche' },
-  { icon: Handshake, label: 'Partenariats' },
-  { icon: HeartPulse, label: 'Vie Étudiante' },
-  { icon: HardHat, label: 'Infrastructure' },
-  { icon: Cpu, label: 'Équipements' },
-  { icon: Package, label: 'Inventaire' },
-  { icon: BookOpen, label: 'Formation Continue' },
-  { icon: Leaf, label: 'ESG / RSE' },
-  { icon: Target, label: 'Stratégie' },
-  { icon: Truck, label: 'Logistique' },
-  { icon: GraduationCap, label: 'Pédagogie' },
-  { icon: ClipboardList, label: 'Scolarité' },
-]
+const ROLE_META = {
+  presidency:        { label: 'Présidence UCAR', color: '#f59e0b', bg: 'rgba(245,158,11,0.15)' },
+  institution_admin: { label: 'Directeur',        color: '#38bdf8', bg: 'rgba(56,189,248,0.15)' },
+  viewer:            { label: 'Observateur',       color: '#86efac', bg: 'rgba(134,239,172,0.15)' },
+}
 
 export default function Sidebar() {
   const navigate = useNavigate()
-  const user = (() => {
-    try { return JSON.parse(localStorage.getItem('ucar_user') || '{}') } catch { return {} }
-  })()
+  const { t, isRTL } = useLang()
+  const { user, role, can } = useAuth()
 
   function handleLogout() {
     localStorage.removeItem('ucar_token')
     localStorage.removeItem('ucar_user')
+    window.dispatchEvent(new Event('ucar_user_change'))
     navigate('/login')
   }
 
+  const sideStyle = {
+    ...styles.sidebar,
+    left: isRTL ? 'auto' : 0,
+    right: isRTL ? 0 : 'auto',
+  }
+
+  const ChevronEnd = isRTL ? ChevronLeft : ChevronRight
+
   return (
-    <aside style={styles.sidebar}>
+    <aside style={sideStyle}>
       {/* Logo */}
       <div style={styles.logo}>
         <div style={styles.logoIcon}>
-          <svg width="22" height="22" viewBox="0 0 32 32" fill="none">
-            <path d="M8 22 L16 10 L24 22" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-            <path d="M11 18 L21 18" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            {/* Shield crest shape */}
+            <path d="M24 4 L40 10 L40 26 C40 35 32 42 24 45 C16 42 8 35 8 26 L8 10 Z" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5"/>
+            {/* U letter */}
+            <path d="M16 16 L16 26 C16 31 20 33 24 33 C28 33 32 31 32 26 L32 16" stroke="white" strokeWidth="2.5" strokeLinecap="round" fill="none"/>
+            {/* Crossbar decoration */}
+            <path d="M19 37 L29 37" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
           </svg>
         </div>
         <div>
@@ -93,52 +94,45 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav style={styles.nav}>
-        {NAV.map((group) => (
-          <div key={group.section} style={styles.navGroup}>
-            <div style={styles.navSection}>{group.section}</div>
-            {group.items.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                style={({ isActive }) => ({
-                  ...styles.navItem,
-                  ...(isActive ? styles.navItemActive : {}),
-                })}
-              >
-                {({ isActive }) => (
-                  <>
-                    <item.icon size={17} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }} />
-                    <span style={styles.navLabel}>{item.label}</span>
-                    {isActive && <ChevronRight size={14} style={{ marginLeft: 'auto', opacity: 0.6 }} />}
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-
-        {/* Coming soon modules */}
-        <div style={styles.navGroup}>
-          <div style={styles.navSection}>Modules à venir</div>
-          {COMING_SOON_MODULES.map((mod) => (
-            <div key={mod.label} style={styles.lockedItem}>
-              <mod.icon size={15} style={{ flexShrink: 0, opacity: 0.35 }} />
-              <span style={styles.lockedLabel}>{mod.label}</span>
-              <Lock size={11} style={{ marginLeft: 'auto', opacity: 0.3 }} />
+        {NAV.map((group) => {
+          const visibleItems = group.items.filter(
+            item => !item.roles || item.roles.includes(role)
+          )
+          if (!visibleItems.length) return null
+          return (
+            <div key={group.sectionKey} style={styles.navGroup}>
+              <div style={styles.navSection}>{t(group.sectionKey)}</div>
+              {visibleItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  style={({ isActive }) => ({
+                    ...styles.navItem,
+                    ...(isActive ? styles.navItemActive : {}),
+                  })}
+                >
+                  {({ isActive }) => (
+                    <>
+                      <item.icon size={17} style={{ flexShrink: 0, opacity: isActive ? 1 : 0.75 }} />
+                      <span style={styles.navLabel}>{t(item.labelKey)}</span>
+                      {isActive && <ChevronEnd size={14} style={{ marginInlineStart: 'auto', opacity: 0.6 }} />}
+                    </>
+                  )}
+                </NavLink>
+              ))}
             </div>
-          ))}
-        </div>
+          )
+        })}
       </nav>
 
-      {/* Spacer */}
       <div style={{ flex: 1 }} />
 
       {/* AI Tag */}
       <div style={styles.aiTag}>
         <TrendingUp size={15} />
         <div>
-          <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>Moteur IA actif</div>
-          <div style={{ fontSize: '0.7rem', opacity: 0.65 }}>Claude Sonnet · Prédictif</div>
+          <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>{t('sidebar.ai')}</div>
+          <div style={{ fontSize: '0.7rem', opacity: 0.65 }}>{t('sidebar.ai.sub')}</div>
         </div>
       </div>
 
@@ -146,14 +140,30 @@ export default function Sidebar() {
 
       {/* User */}
       <div style={styles.userRow}>
-        <div style={styles.avatar}>
+        <div style={{
+          ...styles.avatar,
+          background: ROLE_META[role]?.bg || 'rgba(255,255,255,0.15)',
+          color: ROLE_META[role]?.color || 'white',
+          border: `1.5px solid ${ROLE_META[role]?.color || 'transparent'}40`,
+        }}>
           {(user.full_name || 'U').charAt(0).toUpperCase()}
         </div>
         <div style={styles.userInfo}>
-          <div style={styles.userName}>{user.full_name || 'Utilisateur'}</div>
-          <div style={styles.userRole}>{roleLabel(user.role)}</div>
+          <div style={styles.userName}>{user.full_name || t('role.unknown')}</div>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '3px',
+            padding: '1px 7px', borderRadius: '20px',
+            background: ROLE_META[role]?.bg || 'rgba(255,255,255,0.1)',
+            color: ROLE_META[role]?.color || 'rgba(255,255,255,0.5)',
+            fontSize: '0.62rem', fontWeight: 700, letterSpacing: '0.02em',
+          }}>
+            {role === 'presidency' && '👑 '}
+            {role === 'institution_admin' && '🏛 '}
+            {role === 'viewer' && '👁 '}
+            {ROLE_META[role]?.label || role}
+          </div>
         </div>
-        <button style={styles.logoutBtn} onClick={handleLogout} title="Déconnexion">
+        <button style={styles.logoutBtn} onClick={handleLogout} title={t('sidebar.logout')}>
           <LogOut size={15} />
         </button>
       </div>
@@ -161,21 +171,12 @@ export default function Sidebar() {
   )
 }
 
-function roleLabel(role) {
-  const map = {
-    presidency: 'Présidence UCAR',
-    institution_admin: 'Admin Institution',
-    viewer: 'Observateur',
-  }
-  return map[role] || role || 'Inconnu'
-}
-
 const styles = {
   sidebar: {
     width: '240px',
     height: '100vh',
     position: 'fixed',
-    top: 0, left: 0,
+    top: 0,
     background: 'rgb(20, 58, 105)',
     display: 'flex',
     flexDirection: 'column',
@@ -249,21 +250,6 @@ const styles = {
     fontWeight: 600,
   },
   navLabel: { flex: 1 },
-  lockedItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    padding: '6px 10px',
-    borderRadius: '8px',
-    color: 'rgba(255,255,255,0.28)',
-    fontSize: '0.78rem',
-    fontWeight: 500,
-    cursor: 'default',
-  },
-  lockedLabel: {
-    flex: 1,
-    opacity: 0.7,
-  },
   aiTag: {
     margin: '8px 10px 12px',
     padding: '10px 12px',

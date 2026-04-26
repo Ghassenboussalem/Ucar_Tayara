@@ -1,10 +1,8 @@
-import anthropic
-import os
-from dotenv import load_dotenv
-
-load_dotenv()
-
-client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+"""
+Claude service: AI-powered explanations and summaries.
+Uses ai_provider for automatic Anthropic → Groq fallback.
+"""
+from services.ai_provider import simple_complete
 
 SYSTEM_PROMPT = """Tu es UCAR Intelligence, un assistant analytique expert pour l'Université de Carthage (UCAR) en Tunisie.
 Tu analyses les données académiques, financières et RH de 33 institutions universitaires.
@@ -24,38 +22,14 @@ Règles:
 """
 
 
-def ask_claude(user_message: str, data_context: str = "") -> str:
-    """Send a message to Claude with optional data context."""
-    
-    full_message = user_message
-    if data_context:
-        full_message = f"""Contexte des données actuelles:
-{data_context}
-
-Question: {user_message}"""
-
-    message = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1000,
-        system=SYSTEM_PROMPT,
-        messages=[
-            {"role": "user", "content": full_message}
-        ]
-    )
-    
-    return message.content[0].text
-
-
 def explain_anomaly(
     institution_name: str,
     domain: str,
     kpi_name: str,
     kpi_value: float,
     threshold_value: float,
-    historical_context: str = ""
+    historical_context: str = "",
 ) -> str:
-    """Generate an AI explanation for a detected anomaly."""
-    
     prompt = f"""Une anomalie critique a été détectée dans les données de {institution_name}.
 
 Domaine: {domain}
@@ -71,8 +45,7 @@ En 3 phrases maximum:
 2. Identifie les causes probables
 3. Recommande une action immédiate pour le directeur
 """
-    
-    return ask_claude(prompt)
+    return simple_complete(SYSTEM_PROMPT, prompt, max_tokens=500)
 
 
 def generate_report_summary(
@@ -81,10 +54,56 @@ def generate_report_summary(
     academic_data: dict,
     finance_data: dict,
     hr_data: dict,
-    alerts: list
+    alerts: list,
+    infrastructure_data: dict = None,
+    partnership_data: dict = None,
+    employment_data: dict = None,
+    esg_data: dict = None,
+    research_data: dict = None,
 ) -> str:
-    """Generate an AI narrative summary for a report."""
-    
+    extra_sections = ""
+
+    if infrastructure_data:
+        extra_sections += f"""
+INFRASTRUCTURE:
+- Occupation des salles: {infrastructure_data.get('classroom_occupancy_rate', 'N/A')}%
+- Équipements IT opérationnels: {infrastructure_data.get('it_equipment_status_pct', 'N/A')}%
+- Disponibilité laboratoires: {infrastructure_data.get('lab_availability_rate', 'N/A')}%
+"""
+
+    if partnership_data:
+        extra_sections += f"""
+PARTENARIATS & MOBILITÉ:
+- Accords internationaux actifs: {partnership_data.get('active_international_agreements', 'N/A')}
+- Étudiants en mobilité (entrants/sortants): {partnership_data.get('incoming_students', 'N/A')} / {partnership_data.get('outgoing_students', 'N/A')}
+- Partenariats industrie: {partnership_data.get('industry_partnerships', 'N/A')}
+"""
+
+    if employment_data:
+        extra_sections += f"""
+EMPLOYABILITÉ:
+- Taux d'employabilité à 6 mois: {employment_data.get('employability_rate_6m', 'N/A')}%
+- Taux d'employabilité à 12 mois: {employment_data.get('employability_rate_12m', 'N/A')}%
+- Délai moyen d'insertion: {employment_data.get('avg_months_to_employment', 'N/A')} mois
+"""
+
+    if esg_data:
+        extra_sections += f"""
+ESG / DÉVELOPPEMENT DURABLE:
+- Empreinte carbone: {esg_data.get('carbon_footprint_tons', 'N/A')} tonnes CO₂
+- Taux de recyclage: {esg_data.get('recycling_rate', 'N/A')}%
+- Score accessibilité: {esg_data.get('accessibility_score', 'N/A')}/100
+"""
+
+    if research_data:
+        extra_sections += f"""
+RECHERCHE SCIENTIFIQUE:
+- Publications: {research_data.get('publications_count', 'N/A')}
+- Projets actifs: {research_data.get('active_projects', 'N/A')}
+- Financements obtenus: {research_data.get('funding_secured_tnd', 'N/A')} TND
+- Doctorants inscrits: {research_data.get('phd_students', 'N/A')}
+"""
+
     prompt = f"""Génère un résumé exécutif professionnel pour le rapport de {institution_name} - Période: {period}
 
 DONNÉES ACADÉMIQUES:
@@ -105,24 +124,22 @@ DONNÉES RH:
 - Personnel administratif: {hr_data.get('total_admin_staff', 'N/A')}
 - Taux d'absentéisme: {hr_data.get('absenteeism_rate', 'N/A')}%
 - Charge d'enseignement moyenne: {hr_data.get('avg_teaching_load_hours', 'N/A')}h/semaine
-
+{extra_sections}
 ALERTES ACTIVES: {len(alerts)}
 {chr(10).join([f"- [{a.get('severity','').upper()}] {a.get('title','')}" for a in alerts[:3]])}
 
-Rédige un résumé exécutif de 150 mots maximum, structuré en: 
+Rédige un résumé exécutif de 200 mots maximum, structuré en:
 1. Points forts
-2. Points d'attention  
+2. Points d'attention
 3. Recommandations prioritaires
 """
-    
-    return ask_claude(prompt)
+    return simple_complete(SYSTEM_PROMPT, prompt, max_tokens=800)
 
 
 def answer_data_question(question: str, context_data: dict) -> str:
-    """Answer a natural language question about institutional data."""
-    
+    """Legacy single-turn Q&A (used outside the agent context)."""
     context_str = f"""
-Données disponibles pour cette requête:
+Données disponibles:
 
 INSTITUTIONS ({len(context_data.get('institutions', []))} au total):
 {_format_institutions(context_data.get('institutions', []))}
@@ -135,18 +152,16 @@ STATISTIQUES GLOBALES:
 - Taux d'exécution budgétaire moyen: {context_data.get('avg_budget_execution', 'N/A')}%
 - Total étudiants: {context_data.get('total_students', 'N/A')}
 """
-    
-    return ask_claude(question, context_str)
+    return simple_complete(SYSTEM_PROMPT, f"{context_str}\n\nQuestion: {question}", max_tokens=800)
 
 
 def _format_institutions(institutions: list) -> str:
     if not institutions:
         return "Aucune donnée disponible"
     lines = []
-    for inst in institutions[:10]:  # limit context size
+    for inst in institutions[:10]:
         lines.append(
             f"  - {inst.get('name_fr', '')} ({inst.get('code', '')}): "
-            f"score santé {inst.get('health_score', 'N/A')}, "
             f"alertes actives: {inst.get('active_alerts', 0)}"
         )
     if len(institutions) > 10:
