@@ -13,6 +13,8 @@ const T = {
     'nav.alerts': 'Alertes',
     'nav.ingestion': 'Ingestion ETL',
     'nav.reports': 'Rapports',
+    'nav.causal': 'Graphe Causal',
+    'nav.map': 'Carte des institutions',
     'nav.analytics': 'Analytique prédictive',
     // Sidebar coming soon modules
     'mod.research': 'Recherche',
@@ -102,6 +104,8 @@ const T = {
     'nav.alerts': 'التنبيهات',
     'nav.ingestion': 'استيراد ETL',
     'nav.reports': 'التقارير',
+    'nav.causal': 'الرسم البياني السببي',
+    'nav.map': 'خريطة المؤسسات',
     'nav.analytics': 'التحليل التنبؤي',
     // Sidebar coming soon modules
     'mod.research': 'البحث العلمي',

@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getInstitutions } from '../api/client'
-import { Building2, ChevronRight, Search } from 'lucide-react'
+import { getInstitutions, getInstitutionScores } from '../api/client'
+import { Building2, ChevronRight, Search, Map } from 'lucide-react'
 import { useLang } from '../contexts/LangContext'
 
-function HealthDot({ score }) {
-  const color = score >= 75 ? '#22c55e' : score >= 55 ? '#f59e0b' : '#ef4444'
-  return <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: color, display: 'inline-block', flexShrink: 0 }} />
+function ScoreBadge({ score }) {
+  if (score == null) return null
+  const color = score >= 75 ? '#16a34a' : score >= 55 ? '#d97706' : '#dc2626'
+  const bg = score >= 75 ? '#dcfce7' : score >= 55 ? '#fef3c7' : '#fee2e2'
+  const label = score >= 75 ? '🟢' : score >= 55 ? '🟡' : '🔴'
+  return (
+    <span style={{ padding: '2px 8px', borderRadius: '6px', background: bg, color, fontSize: '0.7rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+      {label} {score}/100
+    </span>
+  )
 }
 
 export default function InstitutionsPage() {
@@ -14,11 +21,20 @@ export default function InstitutionsPage() {
   const tx = (fr, ar) => (lang === 'ar' ? ar : fr)
   const navigate = useNavigate()
   const [institutions, setInstitutions] = useState([])
+  const [scores, setScores] = useState({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    getInstitutions().then(setInstitutions).catch(() => {}).finally(() => setLoading(false))
+    Promise.all([
+      getInstitutions(),
+      getInstitutionScores().catch(() => []),
+    ]).then(([insts, scoreList]) => {
+      setInstitutions(insts)
+      const map = {}
+      scoreList.forEach((s) => { map[s.id] = s })
+      setScores(map)
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   const filtered = institutions.filter((i) =>
@@ -73,7 +89,15 @@ export default function InstitutionsPage() {
                 <div style={{ width: '42px', height: '42px', background: 'rgba(29,83,148,0.08)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgb(29,83,148)', fontWeight: 800, fontSize: '0.9rem', flexShrink: 0 }}>
                   {(inst.code || '').slice(0, 2)}
                 </div>
-                <ChevronRight size={16} style={{ color: '#cbd5e1' }} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <ScoreBadge score={scores[inst.id]?.health_score} />
+                  {scores[inst.id]?.critical_alerts > 0 && (
+                    <span style={{ padding: '2px 7px', borderRadius: '6px', background: '#fee2e2', color: '#dc2626', fontSize: '0.68rem', fontWeight: 700 }}>
+                      ⚠ {scores[inst.id].critical_alerts}
+                    </span>
+                  )}
+                  <ChevronRight size={16} style={{ color: '#cbd5e1' }} />
+                </div>
               </div>
 
               <div>

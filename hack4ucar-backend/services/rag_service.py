@@ -10,7 +10,7 @@ from typing import List
 
 logger = logging.getLogger(__name__)
 
-RAG_DIR = Path(r"D:\Ucar_dataset\rag_dataset")
+RAG_DIR = Path(__file__).parent.parent.parent / "rag_dataset"
 CHROMA_DIR = RAG_DIR / "chroma_db"
 COLLECTION_NAME = "ucar_knowledge"
 CHUNK_SIZE = 600      # characters per chunk
@@ -54,37 +54,49 @@ def _chunk_text(text: str) -> List[str]:
     return chunks
 
 
-def ingest_directory(pdf_dir: str = None) -> dict:
-    """Scan a directory for PDFs, chunk them, and store in ChromaDB (skips already-ingested chunks)."""
+def _read_file(file_path: Path) -> str:
+    """Extract text from PDF or Markdown file."""
+    if file_path.suffix.lower() == ".md":
+        return file_path.read_text(encoding="utf-8", errors="ignore")
     try:
         from pypdf import PdfReader
+        reader = PdfReader(str(file_path))
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
     except ImportError:
-        return {"error": "pypdf not installed. Run: pip install pypdf"}
+        raise ImportError("pypdf not installed. Run: pip install pypdf")
 
+
+def ingest_directory(pdf_dir: str = None) -> dict:
+    """Scan a directory for PDFs and Markdown files, chunk them, and store in ChromaDB."""
     collection = _get_collection()
     if collection is None:
-        return {"error": "ChromaDB not available"}
+        return {
+            "ingested": 0, "skipped": 0, "total_docs": 0,
+            "errors": ["chromadb or sentence-transformers not installed. Run: pip install chromadb sentence-transformers"],
+            "message": "",
+        }
 
     directory = Path(pdf_dir) if pdf_dir else RAG_DIR
     if not directory.exists():
         directory.mkdir(parents=True, exist_ok=True)
         return {"ingested": 0, "skipped": 0, "total_docs": 0, "errors": [],
-                "message": "Dossier créé. Déposez vos PDFs dans D:\\Ucar_dataset\\rag_dataset\\ puis relancez l'indexation."}
+                "message": f"Dossier créé : {directory}. Déposez vos fichiers PDF ou Markdown puis relancez l'indexation."}
 
     existing_ids = set(collection.get(include=[])["ids"])
     ingested, skipped, errors = 0, 0, []
 
-    for pdf_path in directory.glob("**/*.pdf"):
+    patterns = [
+        f for f in list(directory.glob("**/*.pdf")) + list(directory.glob("**/*.md"))
+        if not f.name.startswith("._")
+    ]
+    for file_path in patterns:
         try:
-            reader = PdfReader(str(pdf_path))
-            full_text = "\n".join(
-                page.extract_text() or "" for page in reader.pages
-            )
+            full_text = _read_file(file_path)
             chunks = _chunk_text(full_text)
 
             for i, chunk in enumerate(chunks):
                 doc_id = hashlib.md5(
-                    f"{pdf_path.name}:{i}:{chunk[:40]}".encode()
+                    f"{file_path.name}:{i}:{chunk[:40]}".encode()
                 ).hexdigest()
 
                 if doc_id in existing_ids:
@@ -95,7 +107,7 @@ def ingest_directory(pdf_dir: str = None) -> dict:
                     ids=[doc_id],
                     documents=[chunk],
                     metadatas=[{
-                        "source": pdf_path.name,
+                        "source": file_path.name,
                         "chunk_index": i,
                         "total_chunks": len(chunks),
                     }],
@@ -104,8 +116,8 @@ def ingest_directory(pdf_dir: str = None) -> dict:
                 ingested += 1
 
         except Exception as e:
-            logger.warning(f"Failed to ingest {pdf_path.name}: {e}")
-            errors.append(str(pdf_path.name))
+            logger.warning(f"Failed to ingest {file_path.name}: {e}")
+            errors.append(file_path.name)
 
     return {
         "ingested": ingested,

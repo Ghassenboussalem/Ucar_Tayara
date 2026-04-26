@@ -54,6 +54,14 @@ class KPIImportResponse(BaseModel):
     period: str
     kpi_id: Optional[int] = None
     alerts_created: int = 0
+    alerts_resolved: int = 0
+    message: str
+
+
+class AlertScanResponse(BaseModel):
+    institutions_scanned: int
+    alerts_created: int
+    alerts_resolved: int
     message: str
 
 
@@ -93,9 +101,17 @@ _THRESHOLDS: dict[str, list[tuple]] = {
 }
 
 
-def _fire_alerts(db: Session, institution_id, domain: str, data: dict) -> int:
+def _fire_alerts(db: Session, institution_id: int, domain: str, data: dict) -> tuple[int, int]:
+    """
+    Check all threshold rules for a domain against the given KPI data.
+    - Creates alerts for triggered rules (deduplicates).
+    - Auto-resolves existing alerts for rules that are no longer triggered.
+    Returns (alerts_created, alerts_resolved).
+    """
     rules = _THRESHOLDS.get(domain, [])
     created = 0
+    resolved = 0
+
     for kpi_name, op, threshold, severity, title in rules:
         raw = data.get(kpi_name)
         if raw is None:
@@ -106,45 +122,113 @@ def _fire_alerts(db: Session, institution_id, domain: str, data: dict) -> int:
             continue
 
         triggered = (op == "gt" and value > threshold) or (op == "lt" and value < threshold)
-        if not triggered:
-            continue
 
-        # Deduplicate: skip if an identical unresolved alert already exists
-        exists = (
-            db.query(Alert)
-            .filter(
-                Alert.institution_id == institution_id,
-                Alert.kpi_name == kpi_name,
-                Alert.is_resolved.is_(False),
+        if triggered:
+            exists = (
+                db.query(Alert)
+                .filter(
+                    Alert.institution_id == institution_id,
+                    Alert.kpi_name == kpi_name,
+                    Alert.is_resolved.is_(False),
+                )
+                .first()
             )
+            if not exists:
+                direction = ">" if op == "gt" else "<"
+                db.add(
+                    Alert(
+                        institution_id=institution_id,
+                        domain=domain,
+                        severity=severity,
+                        title=title,
+                        description=(
+                            f"{title} — {kpi_name} = {value:.1f}% "
+                            f"(seuil {direction} {threshold}%)"
+                        ),
+                        kpi_name=kpi_name,
+                        kpi_value=value,
+                        threshold_value=threshold,
+                        is_resolved=False,
+                        created_at=datetime.now(),
+                    )
+                )
+                created += 1
+        else:
+            # KPI improved — auto-resolve stale alerts for this KPI
+            stale = (
+                db.query(Alert)
+                .filter(
+                    Alert.institution_id == institution_id,
+                    Alert.kpi_name == kpi_name,
+                    Alert.is_resolved.is_(False),
+                )
+                .all()
+            )
+            for alert in stale:
+                alert.is_resolved = True
+                alert.resolved_at = datetime.now()
+                resolved += 1
+
+    if created or resolved:
+        db.commit()
+    return created, resolved
+
+
+# ─── KPI model registry for the scan engine ───────────────────────────────────
+
+_DOMAIN_MODELS = [
+    ("academic",       AcademicKPI),
+    ("finance",        FinanceKPI),
+    ("hr",             HRKPI),
+    ("esg",            ESGKPI),
+    ("employment",     EmploymentKPI),
+    ("infrastructure", InfrastructureKPI),
+    ("research",       ResearchKPI),
+    ("partnership",    PartnershipKPI),
+]
+
+
+def _kpi_to_dict(kpi) -> dict:
+    return {c.name: getattr(kpi, c.name) for c in kpi.__table__.columns}
+
+
+def _scan_institution(db: Session, institution_id: int) -> dict[str, int]:
+    """Run the full alert engine on the latest KPI record for each domain."""
+    total_created = 0
+    total_resolved = 0
+
+    for domain, model in _DOMAIN_MODELS:
+        kpi = (
+            db.query(model)
+            .filter(model.institution_id == institution_id)
+            .order_by(model.id.desc())
             .first()
         )
-        if exists:
+        if kpi is None:
             continue
+        c, r = _fire_alerts(db, institution_id, domain, _kpi_to_dict(kpi))
+        total_created += c
+        total_resolved += r
 
-        direction = ">" if op == "gt" else "<"
-        db.add(
-            Alert(
-                institution_id=institution_id,
-                domain=domain,
-                severity=severity,
-                title=title,
-                description=(
-                    f"{title} — {kpi_name} = {value:.1f}% "
-                    f"(seuil {direction} {threshold}%)"
-                ),
-                kpi_name=kpi_name,
-                kpi_value=value,
-                threshold_value=threshold,
-                is_resolved=False,
-                created_at=datetime.now(),
-            )
-        )
-        created += 1
+    return {"created": total_created, "resolved": total_resolved}
 
-    if created:
-        db.commit()
-    return created
+
+def scan_all_institutions(db: Session) -> dict[str, int]:
+    """Scan every institution and sync alerts to current KPI state."""
+    institutions = db.query(Institution).all()
+    total_created = 0
+    total_resolved = 0
+
+    for inst in institutions:
+        stats = _scan_institution(db, inst.id)
+        total_created += stats["created"]
+        total_resolved += stats["resolved"]
+
+    return {
+        "institutions": len(institutions),
+        "created": total_created,
+        "resolved": total_resolved,
+    }
 
 
 # ─── Domain writers ───────────────────────────────────────────────────────────
@@ -281,7 +365,7 @@ _WRITERS = {
 }
 
 
-# ─── Endpoint ─────────────────────────────────────────────────────────────────
+# ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/import/kpis", response_model=KPIImportResponse)
 def import_kpis(
@@ -313,7 +397,7 @@ def import_kpis(
         )
 
     kpi = writer(db, institution.id, payload.period, payload.data)
-    alerts_created = _fire_alerts(db, institution.id, domain, payload.data)
+    alerts_created, alerts_resolved = _fire_alerts(db, institution.id, domain, payload.data)
 
     return KPIImportResponse(
         success=True,
@@ -322,8 +406,28 @@ def import_kpis(
         period=payload.period,
         kpi_id=kpi.id,
         alerts_created=alerts_created,
+        alerts_resolved=alerts_resolved,
         message=(
             f"KPIs imported for {institution.name_fr} — {domain} / {payload.period}. "
-            f"{alerts_created} alert(s) triggered."
+            f"{alerts_created} alert(s) triggered, {alerts_resolved} auto-resolved."
+        ),
+    )
+
+
+@router.post("/alerts/scan", response_model=AlertScanResponse)
+def scan_alerts(db: Session = Depends(get_db)):
+    """
+    Rescan all institutions against current KPI data.
+    Creates missing alerts and auto-resolves stale ones.
+    Call this once after seeding to sync the alert state.
+    """
+    stats = scan_all_institutions(db)
+    return AlertScanResponse(
+        institutions_scanned=stats["institutions"],
+        alerts_created=stats["created"],
+        alerts_resolved=stats["resolved"],
+        message=(
+            f"Scanned {stats['institutions']} institutions. "
+            f"{stats['created']} alert(s) created, {stats['resolved']} auto-resolved."
         ),
     )

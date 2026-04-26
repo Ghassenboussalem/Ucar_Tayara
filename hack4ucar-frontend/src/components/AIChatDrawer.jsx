@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, Send, Sparkles, RotateCcw, ChevronRight, Database, FileText, BarChart2, Bell, Building2, LayoutDashboard, Wrench } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 import { sendChat, ingestPdfs } from '../api/client'
 import { useLang } from '../contexts/LangContext'
 
@@ -128,7 +129,6 @@ function Message({ msg, onNavigate, lang }) {
           borderRadius: isUser ? '12px 12px 4px 12px' : '12px 12px 12px 4px',
           fontSize: '0.82rem',
           lineHeight: 1.6,
-          whiteSpace: 'pre-wrap',
           wordBreak: 'break-word',
           ...(isUser
             ? { background: 'rgb(29,83,148)', color: 'white' }
@@ -143,7 +143,29 @@ function Message({ msg, onNavigate, lang }) {
               </span>
             : msg.blocked
               ? `🛡️ ${msg.content}`
-              : msg.content}
+              : isUser
+                ? <span style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</span>
+                : <ReactMarkdown
+                    components={{
+                      p: ({ children }) => <p style={{ margin: '0 0 6px', lineHeight: 1.6 }}>{children}</p>,
+                      strong: ({ children }) => <strong style={{ fontWeight: 700, color: 'inherit' }}>{children}</strong>,
+                      em: ({ children }) => <em style={{ fontStyle: 'italic' }}>{children}</em>,
+                      h1: ({ children }) => <p style={{ fontWeight: 700, fontSize: '0.92rem', margin: '8px 0 4px', borderBottom: '1px solid #e2e8f0', paddingBottom: '4px' }}>{children}</p>,
+                      h2: ({ children }) => <p style={{ fontWeight: 700, fontSize: '0.87rem', margin: '8px 0 4px', color: '#1d3f94' }}>{children}</p>,
+                      h3: ({ children }) => <p style={{ fontWeight: 600, fontSize: '0.83rem', margin: '6px 0 2px' }}>{children}</p>,
+                      ul: ({ children }) => <ul style={{ margin: '4px 0', paddingLeft: '16px', listStyle: 'disc' }}>{children}</ul>,
+                      ol: ({ children }) => <ol style={{ margin: '4px 0', paddingLeft: '16px' }}>{children}</ol>,
+                      li: ({ children }) => <li style={{ margin: '2px 0', lineHeight: 1.5 }}>{children}</li>,
+                      code: ({ inline, children }) => inline
+                        ? <code style={{ background: 'rgba(29,83,148,0.08)', color: 'rgb(29,83,148)', padding: '1px 5px', borderRadius: '4px', fontSize: '0.78rem', fontFamily: 'monospace' }}>{children}</code>
+                        : <pre style={{ background: '#1e293b', color: '#e2e8f0', padding: '8px 10px', borderRadius: '6px', fontSize: '0.76rem', overflowX: 'auto', margin: '6px 0', fontFamily: 'monospace' }}>{children}</pre>,
+                      blockquote: ({ children }) => <blockquote style={{ borderLeft: '3px solid rgb(29,83,148)', margin: '4px 0', paddingLeft: '10px', color: '#64748b', fontStyle: 'italic' }}>{children}</blockquote>,
+                      hr: () => <hr style={{ border: 'none', borderTop: '1px solid #e2e8f0', margin: '8px 0' }} />,
+                    }}
+                  >
+                    {msg.content}
+                  </ReactMarkdown>
+          }
         </div>
 
         {/* Navigation button */}
@@ -322,16 +344,6 @@ export default function AIChatDrawer({ open, onClose }) {
               {suggested.map((s) => (
                 <button key={s} style={S.chip} onClick={() => handleSend(s)}>{s}</button>
               ))}
-      {/* Messages */}
-      <div style={S.messages}>
-        {messages.map((msg, i) => {
-          const isUser = msg.role === 'user'
-          return (
-            <div key={i} style={{ display: 'flex', flexDirection: isUser ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: '8px' }}>
-              {!isUser && <div style={S.aiAvatar}><Sparkles size={12} /></div>}
-              <div style={{ ...S.bubble, ...(isUser ? S.bubbleUser : S.bubbleAI) }}>
-                {msg.loading ? <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Loader2 size={14} style={{ animation: 'spin 0.7s linear infinite' }} /> Analyse en cours…</span> : msg.content}
-              </div>
             </div>
           </div>
         )}

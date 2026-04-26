@@ -58,20 +58,46 @@ def get_dashboard(db: Session = Depends(get_db)):
     avg_success = db.query(func.avg(AcademicKPI.success_rate)).scalar()
     avg_budget = db.query(func.avg(FinanceKPI.budget_execution_rate)).scalar()
 
-    # Build institution summaries with health scores
+    # Build institution summaries with multi-domain health scores
     inst_summaries = []
     for inst in institutions:
         alert_count = db.query(Alert).filter(
             Alert.institution_id == inst.id,
             Alert.is_resolved == False
         ).count()
-        
+        critical_count = db.query(Alert).filter(
+            Alert.institution_id == inst.id,
+            Alert.is_resolved == False,
+            Alert.severity == "critical"
+        ).count()
+        warning_count = alert_count - critical_count
+
         latest_academic = db.query(AcademicKPI).filter(
             AcademicKPI.institution_id == inst.id
         ).order_by(AcademicKPI.id.desc()).first()
-        
-        health = _compute_health_score(latest_academic, alert_count)
-        
+        latest_finance = db.query(FinanceKPI).filter(
+            FinanceKPI.institution_id == inst.id
+        ).order_by(FinanceKPI.id.desc()).first()
+        latest_hr = db.query(HRKPI).filter(
+            HRKPI.institution_id == inst.id
+        ).order_by(HRKPI.id.desc()).first()
+        latest_employment = db.query(EmploymentKPI).filter(
+            EmploymentKPI.institution_id == inst.id
+        ).order_by(EmploymentKPI.id.desc()).first()
+        latest_esg = db.query(ESGKPI).filter(
+            ESGKPI.institution_id == inst.id
+        ).order_by(ESGKPI.id.desc()).first()
+
+        health = _compute_health_score(
+            academic=latest_academic,
+            finance=latest_finance,
+            hr=latest_hr,
+            employment=latest_employment,
+            esg=latest_esg,
+            critical_alerts=critical_count,
+            warning_alerts=warning_count,
+        )
+
         inst_summaries.append(InstitutionSummary(
             id=inst.id,
             code=inst.code,
@@ -109,6 +135,55 @@ def get_dashboard(db: Session = Depends(get_db)):
 @router.get("/institutions", response_model=List[InstitutionOut])
 def get_institutions(db: Session = Depends(get_db)):
     return db.query(Institution).filter(Institution.is_active == True).all()
+
+
+@router.get("/institutions/scores")
+def get_institution_scores(db: Session = Depends(get_db)):
+    """Return health score and alert counts for all active institutions."""
+    institutions = db.query(Institution).filter(Institution.is_active == True).all()
+    result = []
+    for inst in institutions:
+        critical = db.query(Alert).filter(
+            Alert.institution_id == inst.id,
+            Alert.is_resolved == False,
+            Alert.severity == "critical",
+        ).count()
+        warning = db.query(Alert).filter(
+            Alert.institution_id == inst.id,
+            Alert.is_resolved == False,
+            Alert.severity == "warning",
+        ).count()
+        academic = db.query(AcademicKPI).filter(
+            AcademicKPI.institution_id == inst.id
+        ).order_by(AcademicKPI.id.desc()).first()
+        finance = db.query(FinanceKPI).filter(
+            FinanceKPI.institution_id == inst.id
+        ).order_by(FinanceKPI.id.desc()).first()
+        hr = db.query(HRKPI).filter(
+            HRKPI.institution_id == inst.id
+        ).order_by(HRKPI.id.desc()).first()
+        employment = db.query(EmploymentKPI).filter(
+            EmploymentKPI.institution_id == inst.id
+        ).order_by(EmploymentKPI.id.desc()).first()
+        esg = db.query(ESGKPI).filter(
+            ESGKPI.institution_id == inst.id
+        ).order_by(ESGKPI.id.desc()).first()
+        health = _compute_health_score(
+            academic=academic,
+            finance=finance,
+            hr=hr,
+            employment=employment,
+            esg=esg,
+            critical_alerts=critical,
+            warning_alerts=warning,
+        )
+        result.append({
+            "id": inst.id,
+            "health_score": health,
+            "active_alerts": critical + warning,
+            "critical_alerts": critical,
+        })
+    return result
 
 
 @router.get("/institutions/{institution_id}", response_model=InstitutionOut)
@@ -234,6 +309,23 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
                 "staff_turnover_rate": round(float(avg_hr[2] or 0), 2),
             }
 
+    lat_academic    = academic[-1]    if academic    else None
+    lat_finance     = finance[-1]     if finance     else None
+    lat_hr          = hr[-1]          if hr          else None
+    lat_employment  = employment[-1]  if employment  else None
+    lat_esg         = esg[-1]         if esg         else None
+    crit_count = sum(1 for a in alerts if a.severity == "critical")
+    warn_count = sum(1 for a in alerts if a.severity == "warning")
+    health_score = _compute_health_score(
+        academic=lat_academic,
+        finance=lat_finance,
+        hr=lat_hr,
+        employment=lat_employment,
+        esg=lat_esg,
+        critical_alerts=crit_count,
+        warning_alerts=warn_count,
+    )
+
     return {
         "institution": {
             "id": inst.id,
@@ -245,6 +337,7 @@ def get_all_kpis(institution_id: int, db: Session = Depends(get_db)):
             "director_name": inst.director_name,
             "student_capacity": inst.student_capacity,
         },
+        "health_score": health_score,
         "academic": [_row_to_dict(a) for a in academic],
         "finance": [_row_to_dict(f) for f in finance],
         "hr": [_row_to_dict(h) for h in hr],
@@ -718,7 +811,7 @@ def _build_context(db: Session) -> str:
         "=== INSTITUTIONS (extrait) ===",
     ]
 
-    for inst in institutions[:15]:
+    for inst in institutions:
         latest_acad = db.query(AcademicKPI).filter(
             AcademicKPI.institution_id == inst.id
         ).order_by(AcademicKPI.id.desc()).first()
@@ -779,6 +872,35 @@ def chat(request: ChatMessage, db: Session = Depends(get_db)):
             block_reason="message_too_long",
             context_used="route_validation",
         )
+
+    # ── Route to tool-use agent for navigation AND live-data queries ─────────────
+    # run_agent uses real DB tools → never hallucinates; agno only for pure synthesis
+    _TOOL_KEYWORDS = (
+        # navigation
+        "emmène", "montre", "va sur", "ouvre", "navigue", "page", "aller à",
+        "carte", "map", "tableau de bord",
+        # data queries — alerts, KPIs, institutions, rankings
+        "alerte", "critique", "urgent", "anomalie",
+        "compare", "classement", "rang", "meilleur", "pire", "top ", "écart",
+        "taux de réussite", "taux d'abandon", "taux d'absentéisme",
+        "taux d'exécution", "budget", "kpi",
+        "institution", "liste", "réseau",
+        "quel", "quell", "combien", "donne", "affiche", "montre",
+    )
+    if any(kw in message.lower() for kw in _TOOL_KEYWORDS):
+        try:
+            result = run_agent(message, history, db)
+            nav = result.get("navigation")
+            return ChatResponse(
+                response=result["response"],
+                navigation=nav,
+                actions=result.get("actions"),
+                agent_used="ToolUseAgent",
+                context_used="tool_agent_db",
+            )
+        except Exception as _tool_err:
+            import logging as _log
+            _log.getLogger(__name__).warning("tool agent failed: %s", _tool_err)
 
     # ── Agno multi-agent orchestrator (analysis, benchmarks, forecasts, strategy)
     try:
@@ -935,6 +1057,26 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
         HRKPI.institution_id == request.institution_id
     ).order_by(HRKPI.id.desc()).first()
 
+    infrastructure = db.query(InfrastructureKPI).filter(
+        InfrastructureKPI.institution_id == request.institution_id
+    ).order_by(InfrastructureKPI.id.desc()).first()
+
+    partnership = db.query(PartnershipKPI).filter(
+        PartnershipKPI.institution_id == request.institution_id
+    ).order_by(PartnershipKPI.id.desc()).first()
+
+    employment = db.query(EmploymentKPI).filter(
+        EmploymentKPI.institution_id == request.institution_id
+    ).order_by(EmploymentKPI.id.desc()).first()
+
+    esg = db.query(ESGKPI).filter(
+        ESGKPI.institution_id == request.institution_id
+    ).order_by(ESGKPI.id.desc()).first()
+
+    research = db.query(ResearchKPI).filter(
+        ResearchKPI.institution_id == request.institution_id
+    ).order_by(ResearchKPI.id.desc()).first()
+
     alerts = db.query(Alert).filter(
         Alert.institution_id == request.institution_id,
         Alert.is_resolved == False
@@ -943,6 +1085,11 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
     academic_dict = _row_to_dict(academic) if academic else {}
     finance_dict = _row_to_dict(finance) if finance else {}
     hr_dict = _row_to_dict(hr) if hr else {}
+    infrastructure_dict = _row_to_dict(infrastructure) if infrastructure else None
+    partnership_dict = _row_to_dict(partnership) if partnership else None
+    employment_dict = _row_to_dict(employment) if employment else None
+    esg_dict = _row_to_dict(esg) if esg else None
+    research_dict = _row_to_dict(research) if research else None
     alerts_list = [_alert_to_dict(a) for a in alerts]
 
     institution_dict = {
@@ -962,6 +1109,11 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
             finance=finance_dict,
             hr=hr_dict,
             lang=lang,
+            infrastructure=infrastructure_dict,
+            partnership=partnership_dict,
+            employment=employment_dict,
+            esg=esg_dict,
+            research=research_dict,
         )
         filename = f"{'تقرير' if lang == 'ar' else 'rapport'}_{inst.code}_{request.period}.xlsx"
         media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -972,7 +1124,12 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
             academic_data=academic_dict,
             finance_data=finance_dict,
             hr_data=hr_dict,
-            alerts=alerts_list
+            alerts=alerts_list,
+            infrastructure_data=infrastructure_dict,
+            partnership_data=partnership_dict,
+            employment_data=employment_dict,
+            esg_data=esg_dict,
+            research_data=research_dict,
         )
         content = generate_pdf_report(
             institution=institution_dict,
@@ -983,6 +1140,11 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
             alerts=alerts_list,
             ai_summary=ai_summary,
             lang=lang,
+            infrastructure=infrastructure_dict,
+            partnership=partnership_dict,
+            employment=employment_dict,
+            esg=esg_dict,
+            research=research_dict,
         )
         filename = f"{'تقرير' if lang == 'ar' else 'rapport'}_{inst.code}_{request.period}.pdf"
         media_type = "application/pdf"
@@ -998,30 +1160,83 @@ def generate_report(request: ReportRequest, db: Session = Depends(get_db)):
 # HELPERS
 # ─────────────────────────────────────────────────────────────
 
-def _compute_health_score(academic: AcademicKPI, alert_count: int) -> float:
-    if not academic:
+def _compute_health_score(
+    academic=None,
+    finance=None,
+    hr=None,
+    employment=None,
+    esg=None,
+    critical_alerts: int = 0,
+    warning_alerts: int = 0,
+) -> float:
+    """
+    Composite institutional health score 0–100.
+    Weights: Academic 40%, Finance 20%, HR 15%, Employment 15%, ESG 10%.
+    Deductions: critical alert −5, warning alert −2 (capped at −25).
+    """
+    domain_scores = []
+
+    if academic:
+        s = 100.0
+        if academic.success_rate is not None:
+            sr = float(academic.success_rate)
+            s -= 0 if sr >= 75 else (15 if sr >= 60 else 35)
+        if academic.dropout_rate is not None:
+            dr = float(academic.dropout_rate)
+            s -= 0 if dr <= 8 else (10 if dr <= 15 else 25)
+        if academic.attendance_rate is not None:
+            ar = float(academic.attendance_rate)
+            s -= 0 if ar >= 85 else (10 if ar >= 70 else 20)
+        domain_scores.append((max(0.0, min(100.0, s)), 40))
+
+    if finance:
+        s = 100.0
+        if finance.budget_execution_rate is not None:
+            ber = float(finance.budget_execution_rate)
+            if 80 <= ber <= 95:
+                pass
+            elif ber > 100:
+                s -= 30
+            elif ber >= 60:
+                s -= 10
+            else:
+                s -= 20
+        domain_scores.append((max(0.0, min(100.0, s)), 20))
+
+    if hr:
+        s = 100.0
+        if hr.absenteeism_rate is not None:
+            ab = float(hr.absenteeism_rate)
+            s -= 0 if ab <= 5 else (10 if ab <= 10 else (25 if ab <= 20 else 40))
+        if hr.staff_turnover_rate is not None:
+            tr = float(hr.staff_turnover_rate)
+            s -= 0 if tr <= 5 else (10 if tr <= 10 else 20)
+        domain_scores.append((max(0.0, min(100.0, s)), 15))
+
+    if employment:
+        s = 100.0
+        if employment.employability_rate_6m is not None:
+            er = float(employment.employability_rate_6m)
+            s -= 0 if er >= 70 else (15 if er >= 50 else 30)
+        domain_scores.append((max(0.0, min(100.0, s)), 15))
+
+    if esg:
+        s = 100.0
+        if esg.recycling_rate is not None:
+            rr = float(esg.recycling_rate)
+            s -= 0 if rr >= 35 else (15 if rr >= 20 else 30)
+        if esg.accessibility_score is not None:
+            ac = float(esg.accessibility_score)
+            s -= 0 if ac >= 70 else (10 if ac >= 55 else 20)
+        domain_scores.append((max(0.0, min(100.0, s)), 10))
+
+    if not domain_scores:
         return 50.0
-    score = 100.0
-    if academic.success_rate:
-        sr = float(academic.success_rate)
-        if sr < 60:
-            score -= 30
-        elif sr < 75:
-            score -= 15
-    if academic.dropout_rate:
-        dr = float(academic.dropout_rate)
-        if dr > 15:
-            score -= 25
-        elif dr > 8:
-            score -= 10
-    if academic.attendance_rate:
-        ar = float(academic.attendance_rate)
-        if ar < 60:
-            score -= 20
-        elif ar < 75:
-            score -= 10
-    score -= alert_count * 5
-    return max(0.0, min(100.0, round(score, 1)))
+
+    total_weight = sum(w for _, w in domain_scores)
+    weighted = sum(sc * w for sc, w in domain_scores) / total_weight
+    penalty = min(25, critical_alerts * 5 + warning_alerts * 2)
+    return max(0.0, min(100.0, round(weighted - penalty, 1)))
 
 
 def _row_to_dict(row) -> dict:

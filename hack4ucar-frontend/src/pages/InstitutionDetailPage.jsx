@@ -1,41 +1,40 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, ReferenceLine, PieChart, Pie, Cell,
+  ComposedChart, Area,
 } from 'recharts'
-import { getAllKPIs } from '../api/client'
-import { ArrowLeft, GraduationCap, DollarSign, Users, Bell, Building2, Globe, Briefcase, Leaf, BookOpen } from 'lucide-react'
+import { getAllKPIs, resolveAlert, sendChat, getForecastAcademic } from '../api/client'
+import {
+  ArrowLeft, GraduationCap, DollarSign, Users, Bell, Building2, Globe,
+  Briefcase, Leaf, BookOpen, LayoutDashboard, Sparkles, CheckCircle2,
+} from 'lucide-react'
 import CausalTooltip from '../components/CausalTooltip'
 import { useLang } from '../contexts/LangContext'
 
 const TABS = [
-  { id: 'academic',       label: 'Académique',          icon: GraduationCap },
-  { id: 'finance',        label: 'Finance',             icon: DollarSign },
-  { id: 'hr',             label: 'Ressources Humaines', icon: Users },
-  { id: 'infrastructure', label: 'Infrastructure',      icon: Building2 },
-  { id: 'partnership',    label: 'Partenariats',        icon: Globe },
-  { id: 'employment',     label: 'Employabilité',       icon: Briefcase },
-  { id: 'esg',           label: 'ESG / RSE',           icon: Leaf },
-  { id: 'research',      label: 'Recherche',           icon: BookOpen },
-  { id: 'alerts',         label: 'Alertes',             icon: Bell },
+  { id: 'overview',      label: 'Vue d\'ensemble',   icon: LayoutDashboard },
+  { id: 'academic',      label: 'Académique',         icon: GraduationCap },
+  { id: 'finance',       label: 'Finance',            icon: DollarSign },
+  { id: 'hr',            label: 'Ressources Humaines',icon: Users },
+  { id: 'infrastructure',label: 'Infrastructure',     icon: Building2 },
+  { id: 'partnership',   label: 'Partenariats',       icon: Globe },
+  { id: 'employment',    label: 'Employabilité',      icon: Briefcase },
+  { id: 'esg',           label: 'ESG / RSE',          icon: Leaf },
+  { id: 'research',      label: 'Recherche',          icon: BookOpen },
+  { id: 'alerts',        label: 'Alertes',            icon: Bell },
 ]
 
 const PIE_COLORS = ['#1d5394', '#059669', '#f59e0b', '#0891b2', '#7c3aed', '#dc2626']
 const SEV_COLOR  = { critical: '#dc2626', warning: '#f59e0b', info: '#3b82f6' }
 const TAB_LABELS_AR = {
-  academic: 'أكاديمي',
-  finance: 'مالي',
-  hr: 'الموارد البشرية',
-  infrastructure: 'البنية التحتية',
-  partnership: 'الشراكات',
-  employment: 'التشغيل',
-  esg: 'ESG / RSE',
-  research: 'البحث',
-  alerts: 'التنبيهات',
+  overview: 'نظرة عامة', academic: 'أكاديمي', finance: 'مالي',
+  hr: 'الموارد البشرية', infrastructure: 'البنية التحتية', partnership: 'الشراكات',
+  employment: 'التشغيل', esg: 'ESG / RSE', research: 'البحث', alerts: 'التنبيهات',
 }
 
-// ── Shared components ───────────────────────────────────────────────────────
+// ── Shared components ────────────────────────────────────────────────────────
 
 function DeltaBadge({ current, previous, unit = '', invertColor = false, label = 'vs préc.' }) {
   if (current == null || previous == null) return null
@@ -129,7 +128,108 @@ function BadgeRow({ items }) {
 const TT_STYLE = { borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '11px' }
 const AXIS_TICK = { fontSize: 10, fill: '#94a3b8' }
 
-// ── Main page ───────────────────────────────────────────────────────────────
+// ── Overview helpers ─────────────────────────────────────────────────────────
+
+function HealthGauge({ score }) {
+  const color = score >= 75 ? '#16a34a' : score >= 55 ? '#d97706' : '#dc2626'
+  const bg    = score >= 75 ? '#f0fdf4' : score >= 55 ? '#fffbeb' : '#fef2f2'
+  const label = score >= 75 ? 'Bonne santé' : score >= 55 ? 'Attention requise' : 'Situation critique'
+  const emoji = score >= 75 ? '🟢' : score >= 55 ? '🟡' : '🔴'
+  const radius = 52
+  const circ   = 2 * Math.PI * radius
+  const filled = circ * (score / 100)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r={radius} fill="none" stroke="#e2e8f0" strokeWidth="10" />
+        <circle cx="70" cy="70" r={radius} fill="none" stroke={color} strokeWidth="10"
+          strokeDasharray={`${filled} ${circ}`} strokeLinecap="round"
+          transform="rotate(-90 70 70)" style={{ transition: 'stroke-dasharray 0.8s ease' }} />
+        <text x="70" y="66" textAnchor="middle" fontSize="26" fontWeight="800" fill={color}>{score}</text>
+        <text x="70" y="83" textAnchor="middle" fontSize="11" fill="#94a3b8">/100</text>
+      </svg>
+      <div style={{ padding: '4px 12px', borderRadius: '99px', background: bg, color, fontSize: '0.75rem', fontWeight: 700 }}>
+        {emoji} {label}
+      </div>
+    </div>
+  )
+}
+
+function DomainBar({ label, score, color }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <span style={{ width: '110px', fontSize: '0.72rem', color: '#475569', fontWeight: 500, flexShrink: 0 }}>{label}</span>
+      <div style={{ flex: 1, height: '8px', background: '#f1f5f9', borderRadius: '99px', overflow: 'hidden' }}>
+        <div style={{ width: `${score}%`, height: '100%', background: color, borderRadius: '99px', transition: 'width 0.6s ease' }} />
+      </div>
+      <span style={{ width: '36px', fontSize: '0.72rem', fontWeight: 700, color, textAlign: 'right' }}>{score}</span>
+    </div>
+  )
+}
+
+function ForecastMiniChart({ data, label, color = 'rgb(29,83,148)', invertColor = false }) {
+  if (!data?.points?.length) return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100px', color: '#94a3b8', fontSize: '0.75rem' }}>
+      Données insuffisantes
+    </div>
+  )
+  const { trend, change_pct, confidence, last_actual, last_forecast } = data
+  const isGood = invertColor ? trend === 'down' : trend === 'up'
+  const trendColor = trend === 'stable' ? '#64748b' : isGood ? '#16a34a' : '#dc2626'
+  const trendIcon = trend === 'up' ? '↑' : trend === 'down' ? '↓' : '→'
+
+  const chartData = data.points.map((p, i, arr) => {
+    const isLastActual = !p.is_forecast && (i === arr.length - 1 || arr[i + 1]?.is_forecast)
+    return {
+      name: p.name,
+      actual: p.actual,
+      forecast: p.is_forecast || isLastActual ? p.forecast : null,
+      lower: p.lower,
+      upper: p.upper,
+    }
+  })
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>{label}</span>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <span style={{ padding: '2px 7px', borderRadius: '6px', background: trendColor + '15', color: trendColor, fontSize: '0.7rem', fontWeight: 700 }}>
+            {trendIcon} {Math.abs(change_pct)}%
+          </span>
+          <span style={{ fontSize: '0.64rem', color: '#94a3b8' }}>conf. {confidence}%</span>
+        </div>
+      </div>
+      <ResponsiveContainer width="100%" height={90}>
+        <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
+          <XAxis dataKey="name" tick={{ fontSize: 8, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 8, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+          <Tooltip
+            contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '10px', padding: '6px 10px' }}
+            formatter={(v, n) => [v != null ? `${v}%` : '—', n === 'upper' || n === 'lower' ? null : n]}
+            labelFormatter={l => l}
+          />
+          <Area type="monotone" dataKey="upper" fill={color + '20'} stroke="none" />
+          <Area type="monotone" dataKey="lower" fill="white" stroke="none" />
+          <Line type="monotone" dataKey="actual" stroke={color} strokeWidth={2.5} dot={{ r: 3, fill: color }} connectNulls={false} />
+          <Line type="monotone" dataKey="forecast" stroke={color} strokeWidth={2} strokeDasharray="5 3" dot={{ r: 4, fill: color, strokeWidth: 2, stroke: 'white' }} connectNulls={false} />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <div style={{ fontSize: '0.67rem', color: '#64748b', marginTop: '4px', display: 'flex', gap: '12px' }}>
+        <span>Actuel <strong style={{ color }}>{last_actual}%</strong></span>
+        <span>Prévu <strong style={{ color: trendColor }}>{last_forecast}%</strong></span>
+        <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span style={{ display: 'inline-block', width: '14px', height: '2px', background: color, borderRadius: '2px' }} />
+          Réel
+          <span style={{ display: 'inline-block', width: '14px', height: '0', borderTop: `2px dashed ${color}`, marginLeft: '6px' }} />
+          Prévu
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 
 export default function InstitutionDetailPage() {
   const { lang } = useLang()
@@ -138,12 +238,30 @@ export default function InstitutionDetailPage() {
   const navigate = useNavigate()
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('academic')
+  const [tab, setTab] = useState('overview')
+  const [resolvedIds, setResolvedIds] = useState(new Set())
+  const [aiAnalysis, setAiAnalysis] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [forecasts, setForecasts] = useState({})
+  const analysisRef = useRef(null)
 
   useEffect(() => {
     async function load() {
       setLoading(true)
-      try { setData(await getAllKPIs(id)) } catch {}
+      try {
+        const kpiData = await getAllKPIs(id)
+        setData(kpiData)
+        const [fcSuccess, fcDropout, fcBudget] = await Promise.allSettled([
+          getForecastAcademic(id, 'success_rate'),
+          getForecastAcademic(id, 'dropout_rate'),
+          getForecastAcademic(id, 'attendance_rate'),
+        ])
+        setForecasts({
+          success_rate: fcSuccess.status === 'fulfilled' ? fcSuccess.value : null,
+          dropout_rate: fcDropout.status === 'fulfilled' ? fcDropout.value : null,
+          attendance_rate: fcBudget.status === 'fulfilled' ? fcBudget.value : null,
+        })
+      } catch {}
       setLoading(false)
     }
     load()
@@ -156,30 +274,32 @@ export default function InstitutionDetailPage() {
   const academic   = data.academic      || []
   const finance    = data.finance       || []
   const hr         = data.hr            || []
-  const alerts     = data.alerts        || []
+  const rawAlerts  = data.alerts        || []
+  const alerts     = rawAlerts.filter(a => !resolvedIds.has(a.id))
   const employment = data.employment    || []
   const infra      = data.infrastructure|| []
   const partner    = data.partnership   || []
   const esg        = data.esg          || []
   const research   = data.research     || []
   const netAvg     = data.network_avg   || {}
+  const healthScore = data.health_score ?? 50
 
-  const latA = academic[academic.length - 1]   || {}
-  const prvA = academic[academic.length - 2]   || {}
-  const latF = finance[finance.length - 1]     || {}
-  const prvF = finance[finance.length - 2]     || {}
-  const latH = hr[hr.length - 1]              || {}
-  const prvH = hr[hr.length - 2]              || {}
+  const latA = academic[academic.length - 1]    || {}
+  const prvA = academic[academic.length - 2]    || {}
+  const latF = finance[finance.length - 1]      || {}
+  const prvF = finance[finance.length - 2]      || {}
+  const latH = hr[hr.length - 1]               || {}
+  const prvH = hr[hr.length - 2]               || {}
   const latE = employment[employment.length - 1]|| {}
   const prvE = employment[employment.length - 2]|| {}
-  const latI = infra[infra.length - 1]         || {}
-  const prvI = infra[infra.length - 2]         || {}
-  const latP = partner[partner.length - 1]     || {}
-  const prvP = partner[partner.length - 2]     || {}
-  const latG = esg[esg.length - 1]            || {}
-  const prvG = esg[esg.length - 2]            || {}
-  const latR = research[research.length - 1]  || {}
-  const prvR = research[research.length - 2]  || {}
+  const latI = infra[infra.length - 1]          || {}
+  const prvI = infra[infra.length - 2]          || {}
+  const latP = partner[partner.length - 1]      || {}
+  const prvP = partner[partner.length - 2]      || {}
+  const latG = esg[esg.length - 1]             || {}
+  const prvG = esg[esg.length - 2]             || {}
+  const latR = research[research.length - 1]   || {}
+  const prvR = research[research.length - 2]   || {}
 
   // Chart data
   const academicTrend = academic.map(r => ({ name: r.semester, 'Réussite': +r.success_rate, 'Abandon': +r.dropout_rate, 'Présence': +r.attendance_rate }))
@@ -205,7 +325,6 @@ export default function InstitutionDetailPage() {
   const maintRes = latI.maintenance_requests
     ? Math.round((latI.resolved_requests / latI.maintenance_requests) * 100) : 0
 
-  // ESG charts
   const esgConsumptionChart = esg.map(r => ({
     name: r.fiscal_year,
     'Énergie (MWh)': +(r.energy_consumption_kwh / 1000).toFixed(0),
@@ -218,14 +337,53 @@ export default function InstitutionDetailPage() {
     'Mobilité durable %': +r.sustainable_mobility_pct,
     'Accessibilité /100': +r.accessibility_score,
   }))
-
-  // Research charts
   const researchChart = research.map(r => ({
     name: r.academic_year,
     'Publications': r.publications_count,
     'Projets actifs': r.active_projects,
     'Doctorants': r.phd_students,
   }))
+
+  // Domain sub-scores for overview bars
+  const domainScores = [
+    { label: 'Académique',    score: latA.success_rate ? Math.max(0, Math.round(100 - Math.max(0, 75 - +latA.success_rate) * 1.5 - Math.max(0, +latA.dropout_rate - 8) * 2)) : null, color: '#1d5394' },
+    { label: 'Finance',       score: latF.budget_execution_rate ? Math.max(0, Math.round(100 - Math.abs(+latF.budget_execution_rate - 87) * 1.2)) : null, color: '#0891b2' },
+    { label: 'Ressources H.', score: latH.absenteeism_rate ? Math.max(0, Math.round(100 - +latH.absenteeism_rate * 3 - Math.max(0, +latH.staff_turnover_rate - 5) * 2)) : null, color: '#7c3aed' },
+    { label: 'Employabilité', score: latE.employability_rate_6m ? Math.min(100, Math.round(+latE.employability_rate_6m * 1.2)) : null, color: '#059669' },
+    { label: 'ESG',           score: latG.recycling_rate ? Math.max(0, Math.round((+latG.recycling_rate / 50 + +latG.accessibility_score / 100) / 2 * 100)) : null, color: '#16a34a' },
+  ].filter(d => d.score !== null)
+
+  async function handleResolve(alertId) {
+    await resolveAlert(alertId).catch(() => {})
+    setResolvedIds(prev => new Set([...prev, alertId]))
+  }
+
+  async function handleAnalyze() {
+    setAiLoading(true)
+    setAiAnalysis('')
+    const prompt = `Analyse comparative de l'institution "${inst.name_fr}" (${inst.code}) par rapport au réseau UCAR.
+
+Données de l'institution :
+- Taux de réussite : ${latA.success_rate ?? 'N/A'}% (moy. réseau : ${netAvg.academic?.success_rate ?? 'N/A'}%)
+- Taux d'abandon : ${latA.dropout_rate ?? 'N/A'}% (moy. réseau : ${netAvg.academic?.dropout_rate ?? 'N/A'}%)
+- Taux de présence : ${latA.attendance_rate ?? 'N/A'}% (moy. réseau : ${netAvg.academic?.attendance_rate ?? 'N/A'}%)
+- Taux d'exécution budgétaire : ${latF.budget_execution_rate ?? 'N/A'}% (moy. réseau : ${netAvg.finance?.budget_execution_rate ?? 'N/A'}%)
+- Absentéisme du personnel : ${latH.absenteeism_rate ?? 'N/A'}% (moy. réseau : ${netAvg.hr?.absenteeism_rate ?? 'N/A'}%)
+- Employabilité à 6 mois : ${latE.employability_rate_6m ?? 'N/A'}%
+- Score de santé institutionnel : ${healthScore}/100
+- Alertes actives : ${alerts.length} (dont ${alerts.filter(a => a.severity === 'critical').length} critiques)
+
+Fournis un diagnostic exécutif en 3 points : (1) forces de l'institution par rapport au réseau, (2) risques principaux identifiés, (3) actions prioritaires recommandées. Sois précis et actionnable.`
+
+    try {
+      const res = await sendChat(prompt, [], inst.id)
+      setAiAnalysis(res.response || res.message || '')
+    } catch {
+      setAiAnalysis('Analyse temporairement indisponible. Réessayez dans quelques instants.')
+    }
+    setAiLoading(false)
+    setTimeout(() => analysisRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', animation: 'fadeInUp 0.3s ease both' }}>
@@ -259,6 +417,101 @@ export default function InstitutionDetailPage() {
         ))}
       </div>
 
+      {/* ── OVERVIEW ─────────────────────────────────────────────── */}
+      {tab === 'overview' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+          {/* Score + KPIs top row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '16px', alignItems: 'stretch' }}>
+            <SectionCard style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: '190px' }}>
+              <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>Score de santé</div>
+              <HealthGauge score={healthScore} />
+            </SectionCard>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+              <KPICard label="Taux de réussite" value={latA.success_rate} unit="%" color="#059669"
+                current={+latA.success_rate} previous={+prvA.success_rate} networkAvg={netAvg.academic?.success_rate} />
+              <KPICard label="Taux d'abandon" value={latA.dropout_rate} unit="%" color="#dc2626"
+                current={+latA.dropout_rate} previous={+prvA.dropout_rate} invertColor networkAvg={netAvg.academic?.dropout_rate} />
+              <KPICard label="Exécution budget" value={latF.budget_execution_rate} unit="%" color={+latF.budget_execution_rate > 100 ? '#dc2626' : '#0891b2'}
+                current={+latF.budget_execution_rate} previous={+prvF.budget_execution_rate} networkAvg={netAvg.finance?.budget_execution_rate} />
+              <KPICard label="Employabilité 6m" value={latE.employability_rate_6m} unit="%" color="#7c3aed"
+                current={+latE.employability_rate_6m} previous={+prvE.employability_rate_6m} />
+            </div>
+          </div>
+
+          {/* Domain breakdown + Alerts */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <SectionCard title="Performance par domaine">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {domainScores.length > 0
+                  ? domainScores.map(d => <DomainBar key={d.label} {...d} />)
+                  : <div style={{ color: '#94a3b8', fontSize: '0.8rem', textAlign: 'center', padding: '20px' }}>Données insuffisantes</div>
+                }
+              </div>
+            </SectionCard>
+
+            <SectionCard title={`Alertes actives (${alerts.length})`}>
+              {alerts.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '30px', color: '#16a34a', fontWeight: 700, gap: '8px' }}>
+                  <CheckCircle2 size={32} />
+                  Aucune alerte active
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
+                  {alerts.slice(0, 5).map(a => (
+                    <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', borderRadius: '8px', background: (SEV_COLOR[a.severity] || '#94a3b8') + '0d', borderLeft: `3px solid ${SEV_COLOR[a.severity] || '#94a3b8'}` }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.77rem', fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.title}</div>
+                        <div style={{ fontSize: '0.67rem', color: '#94a3b8' }}>{a.domain}</div>
+                      </div>
+                      <span style={{ padding: '2px 6px', borderRadius: '4px', background: SEV_COLOR[a.severity] + '20', color: SEV_COLOR[a.severity], fontSize: '0.65rem', fontWeight: 700, flexShrink: 0 }}>{a.severity}</span>
+                    </div>
+                  ))}
+                  {alerts.length > 5 && <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center' }}>+{alerts.length - 5} autres alertes</div>}
+                </div>
+              )}
+            </SectionCard>
+          </div>
+
+          {/* Prophet Forecasts */}
+          <SectionCard>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+              <div style={{ width: '28px', height: '28px', background: 'rgba(29,83,148,0.08)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>📈</div>
+              <div>
+                <div style={{ fontSize: '0.87rem', fontWeight: 700, color: '#0f172a' }}>Prévisions Prophet — 2 prochains semestres</div>
+                <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: '1px' }}>Modèle séries temporelles avec intervalles de confiance 80%</div>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+              <ForecastMiniChart data={forecasts.success_rate} label="Taux de réussite" color="#059669" />
+              <ForecastMiniChart data={forecasts.dropout_rate} label="Taux d'abandon" color="#dc2626" invertColor />
+              <ForecastMiniChart data={forecasts.attendance_rate} label="Taux de présence" color="rgb(29,83,148)" />
+            </div>
+          </SectionCard>
+
+          {/* AI Analysis */}
+          <SectionCard>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: aiAnalysis ? '16px' : 0 }}>
+              <div>
+                <div style={{ fontSize: '0.87rem', fontWeight: 700, color: '#0f172a' }}>Analyse IA comparative</div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>Compare {inst.code} avec la moyenne du réseau UCAR</div>
+              </div>
+              <button onClick={handleAnalyze} disabled={aiLoading}
+                style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '9px 18px', borderRadius: '8px', border: 'none', background: aiLoading ? '#e2e8f0' : 'linear-gradient(135deg, rgb(20,58,105), rgb(29,83,148))', color: aiLoading ? '#94a3b8' : 'white', fontSize: '0.8rem', fontWeight: 700, cursor: aiLoading ? 'default' : 'pointer', fontFamily: 'Inter,sans-serif', transition: 'all 150ms' }}>
+                <Sparkles size={15} />
+                {aiLoading ? 'Analyse en cours…' : 'Analyser vs réseau'}
+              </button>
+            </div>
+            {aiAnalysis && (
+              <div ref={analysisRef} style={{ padding: '16px', background: 'linear-gradient(135deg, rgba(20,58,105,0.04), rgba(29,83,148,0.06))', borderRadius: '10px', border: '1px solid rgba(29,83,148,0.12)', fontSize: '0.83rem', color: '#1e293b', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                {aiAnalysis}
+              </div>
+            )}
+          </SectionCard>
+        </div>
+      )}
+
       {/* ── ACADEMIC ─────────────────────────────────────────────── */}
       {tab === 'academic' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -279,7 +532,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Taux de répétition" value={latA.repetition_rate} unit="%" color="#f59e0b"
               current={+latA.repetition_rate} previous={+prvA.repetition_rate} invertColor />
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Performance vs moyenne réseau">
               <ProgressBar label="Taux de réussite" value={+latA.success_rate} color="#059669" compare={netAvg.academic?.success_rate} />
@@ -305,7 +557,6 @@ export default function InstitutionDetailPage() {
               ) : <div style={{ textAlign: 'center', padding: '60px', color: '#94a3b8' }}>Aucune donnée</div>}
             </SectionCard>
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Évolution des taux académiques (%)">
               <ResponsiveContainer width="100%" height={240}>
@@ -356,7 +607,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Coût / étudiant" value={(+latF.cost_per_student).toLocaleString('fr-FR')} unit=" TND" color="#7c3aed"
               networkAvg={netAvg.finance?.cost_per_student} />
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: '16px' }}>
             <SectionCard title="Budget alloué vs consommé (M TND)">
               <ResponsiveContainer width="100%" height={260}>
@@ -425,7 +675,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Staff permanent" value={latH.permanent_staff_pct} unit="%" color="rgb(29,83,148)" />
             <KPICard label="Staff contractuel" value={latH.contract_staff_pct} unit="%" color="#0891b2" />
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Évolution des effectifs">
               <ResponsiveContainer width="100%" height={240}>
@@ -464,7 +713,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Bibliothèque (taux)" value={latI.library_capacity_used_pct} unit="%" color="#0891b2"
               current={+latI.library_capacity_used_pct} previous={+prvI.library_capacity_used_pct} />
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Maintenance">
               <MiniStatGrid items={[
@@ -485,7 +733,6 @@ export default function InstitutionDetailPage() {
               <ProgressBar label="Bibliothèque (capacité)" value={+latI.library_capacity_used_pct}   color="#f59e0b" />
             </SectionCard>
           </div>
-
           <SectionCard title="Évolution infrastructure par semestre (%)">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={infraChart}>
@@ -516,16 +763,14 @@ export default function InstitutionDetailPage() {
             <KPICard label="Étudiants sortants"      value={latP.outgoing_students}               color="#0891b2"
               current={latP.outgoing_students} previous={prvP.outgoing_students} deltaLabel="vs an préc." />
           </div>
-
           <SectionCard title="Programmes et partenariats spéciaux">
             <BadgeRow items={[
-              { label: 'Partenariats Erasmus',   value: latP.erasmus_partnerships,         color: '#0891b2' },
-              { label: 'Programmes conjoints',   value: latP.joint_programs,               color: '#7c3aed' },
-              { label: 'Partenariats industrie', value: latP.industry_partnerships,         color: '#059669' },
-              { label: 'Projets internationaux', value: latP.international_projects,        color: 'rgb(29,83,148)' },
+              { label: 'Partenariats Erasmus',   value: latP.erasmus_partnerships,  color: '#0891b2' },
+              { label: 'Programmes conjoints',   value: latP.joint_programs,        color: '#7c3aed' },
+              { label: 'Partenariats industrie', value: latP.industry_partnerships, color: '#059669' },
+              { label: 'Projets internationaux', value: latP.international_projects,color: 'rgb(29,83,148)' },
             ]} />
           </SectionCard>
-
           <SectionCard title="Évolution des accords et partenariats">
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={partnerChart}>
@@ -556,7 +801,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Délai moyen insertion" value={latE.avg_months_to_employment} unit=" mois" color="#f59e0b"
               current={+latE.avg_months_to_employment} previous={+prvE.avg_months_to_employment} invertColor deltaLabel="vs an préc." />
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Destination des diplômés">
               {empDest.length > 0 ? (
@@ -583,7 +827,6 @@ export default function InstitutionDetailPage() {
                 </div>
               ) : <div style={{ textAlign: 'center', padding: '40px', color: '#94a3b8' }}>Aucune donnée</div>}
             </SectionCard>
-
             <SectionCard title="Taux d'insertion professionnelle">
               <ResponsiveContainer width="100%" height={190}>
                 <BarChart data={empChart}>
@@ -628,7 +871,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Espaces verts" value={(latG.green_spaces_sqm || 0).toLocaleString('fr-FR')} unit=" m²" color="#059669"
               current={latG.green_spaces_sqm} previous={prvG.green_spaces_sqm} deltaLabel="vs an préc." />
           </div>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Performance environnementale">
               <ProgressBar label="Taux de recyclage" value={+latG.recycling_rate} color="#059669" />
@@ -651,14 +893,13 @@ export default function InstitutionDetailPage() {
                   <YAxis domain={[0, 100]} tick={AXIS_TICK} />
                   <Tooltip contentStyle={TT_STYLE} />
                   <Legend wrapperStyle={{ fontSize: '11px' }} />
-                  <Bar dataKey="Recyclage %"           fill="#059669" radius={[4,4,0,0]} />
-                  <Bar dataKey="Mobilité durable %"    fill="#7c3aed" radius={[4,4,0,0]} />
-                  <Bar dataKey="Accessibilité /100"    fill="#0891b2" radius={[4,4,0,0]} />
+                  <Bar dataKey="Recyclage %"        fill="#059669" radius={[4,4,0,0]} />
+                  <Bar dataKey="Mobilité durable %" fill="#7c3aed" radius={[4,4,0,0]} />
+                  <Bar dataKey="Accessibilité /100" fill="#0891b2" radius={[4,4,0,0]} />
                 </BarChart>
               </ResponsiveContainer>
             </SectionCard>
           </div>
-
           <SectionCard title="Évolution des consommations">
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={esgConsumptionChart}>
@@ -667,9 +908,9 @@ export default function InstitutionDetailPage() {
                 <YAxis tick={AXIS_TICK} />
                 <Tooltip contentStyle={TT_STYLE} />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />
-                <Line type="monotone" dataKey="Énergie (MWh)"          stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 5 }} />
-                <Line type="monotone" dataKey="Eau (milliers m³)"       stroke="#0891b2" strokeWidth={2.5} dot={{ r: 5 }} />
-                <Line type="monotone" dataKey="Déchets (t)"             stroke="#dc2626" strokeWidth={2}   dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="Énergie (MWh)"    stroke="#f59e0b" strokeWidth={2.5} dot={{ r: 5 }} />
+                <Line type="monotone" dataKey="Eau (milliers m³)" stroke="#0891b2" strokeWidth={2.5} dot={{ r: 5 }} />
+                <Line type="monotone" dataKey="Déchets (t)"      stroke="#dc2626" strokeWidth={2}   dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </SectionCard>
@@ -689,7 +930,6 @@ export default function InstitutionDetailPage() {
             <KPICard label="Doctorants" value={latR.phd_students} color="#0891b2"
               current={latR.phd_students} previous={prvR.phd_students} deltaLabel="vs an préc." />
           </div>
-
           <SectionCard title="Indicateurs spécialisés">
             <BadgeRow items={[
               { label: 'Brevets déposés',           value: latR.patents_filed,                color: '#f59e0b' },
@@ -698,7 +938,6 @@ export default function InstitutionDetailPage() {
               { label: 'Conférences',               value: latR.conferences_attended,         color: '#0891b2' },
             ]} />
           </SectionCard>
-
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <SectionCard title="Évolution activité de recherche">
               <ResponsiveContainer width="100%" height={240}>
@@ -717,11 +956,11 @@ export default function InstitutionDetailPage() {
             <SectionCard title="Profil recherche">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 {[
-                  { label: 'Publications', value: latR.publications_count, max: 100, color: 'rgb(29,83,148)' },
-                  { label: 'Projets actifs', value: latR.active_projects, max: 25, color: '#7c3aed' },
-                  { label: 'Doctorants', value: latR.phd_students, max: 120, color: '#0891b2' },
-                  { label: 'Collaborations intl.', value: latR.international_collaborations, max: 20, color: '#059669' },
-                  { label: 'Conférences', value: latR.conferences_attended, max: 40, color: '#f59e0b' },
+                  { label: 'Publications',         value: latR.publications_count,           max: 100, color: 'rgb(29,83,148)' },
+                  { label: 'Projets actifs',        value: latR.active_projects,              max: 25,  color: '#7c3aed' },
+                  { label: 'Doctorants',            value: latR.phd_students,                max: 120, color: '#0891b2' },
+                  { label: 'Collaborations intl.',  value: latR.international_collaborations, max: 20,  color: '#059669' },
+                  { label: 'Conférences',           value: latR.conferences_attended,         max: 40,  color: '#f59e0b' },
                 ].map(({ label, value, max, color }) => (
                   <ProgressBar key={label} label={label} value={value || 0} max={max} color={color} suffix="" />
                 ))}
@@ -747,6 +986,10 @@ export default function InstitutionDetailPage() {
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' }}>
                 <span style={{ padding: '2px 8px', borderRadius: '99px', fontSize: '0.7rem', fontWeight: 700, background: (SEV_COLOR[a.severity] || '#94a3b8') + '18', color: SEV_COLOR[a.severity] || '#94a3b8' }}>{a.severity?.toUpperCase()}</span>
                 <span style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{a.domain} · {a.kpi_name} = {a.kpi_value}</span>
+                <button onClick={() => handleResolve(a.id)}
+                  style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: '5px', padding: '4px 10px', borderRadius: '6px', border: '1.5px solid #e2e8f0', background: 'white', fontSize: '0.72rem', fontWeight: 600, color: '#64748b', cursor: 'pointer', fontFamily: 'Inter,sans-serif' }}>
+                  <CheckCircle2 size={13} /> Résolu
+                </button>
               </div>
               <p style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0f172a', marginBottom: '4px' }}>{a.title}</p>
               <p style={{ fontSize: '0.78rem', color: '#475569', lineHeight: 1.5 }}>{a.description}</p>
